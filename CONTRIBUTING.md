@@ -17,7 +17,7 @@ it is a decision. An exception without one is drift.
 2. **Write** following the [code conventions](#code-conventions).
 3. **Test** the logic (see [Tests](#tests)).
 4. **Fix and check**: `just fix`, then `just check`.
-5. **Run**: `cargo run -- <name> <folder>` into a scratch folder, and look at what it made.
+5. **Run**: `just run <name> <folder>` into a scratch folder, and look at what it made.
 6. **Docs**: update `README.md` if what the CLI asks, does or needs changed.
 7. **Commit** (see [Commits](#commits)).
 

@@ -12,3 +12,7 @@ check:
 # run the tests only
 test:
     cargo test
+
+# run the CLI, passing on its arguments: just run <name> <folder>
+run *args:
+    cargo run -- {{args}}
