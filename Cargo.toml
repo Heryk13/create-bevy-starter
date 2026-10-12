@@ -1,0 +1,27 @@
+[package]
+name = "create-bevy-starter"
+version = "0.1.0"
+edition = "2024"
+# phase A: a tool for the template's author only, see bevy-starter's
+# docs/specs/create-bevy-starter/design.md
+publish = false
+
+[dependencies]
+
+# the same lints as bevy-starter, less the ones only a Bevy game needs
+[lints.rust]
+unsafe_code = "deny"
+unused_qualifications = "warn"
+
+[lints.clippy]
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+doc_markdown = "warn"
+manual_let_else = "warn"
+nonstandard_macro_braces = "warn"
+redundant_closure_for_method_calls = "warn"
+redundant_else = "warn"
+semicolon_if_nothing_returned = "warn"
+# CONTRIBUTING forbids mod.rs (a split module is `prompts.rs` next to `prompts/`), and this
+# lint makes the rule hold without review
+mod_module_files = "warn"
