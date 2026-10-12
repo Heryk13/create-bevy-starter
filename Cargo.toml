@@ -7,6 +7,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+inquire = "0.9.4"
 
 # the same lints as bevy-starter, less the ones only a Bevy game needs
 [lints.rust]
