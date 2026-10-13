@@ -171,6 +171,17 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     Ok(())
 }
 
+/// Rewrites `file` on disk with `edit`, one of the pure edits in `choices.rs`. When `edit` finds
+/// nothing to change, the template moved what the CLI edits, and that is reported instead of
+/// leaving the game half made.
+fn edit_file(file: &Path, edit: impl FnOnce(&str) -> Option<String>) -> Result<(), ScaffoldError> {
+    let text =
+        fs::read_to_string(file).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+    let new_text = edit(&text).ok_or_else(|| ScaffoldError::TemplateChanged(file.to_path_buf()))?;
+    fs::write(file, new_text).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+    Ok(())
+}
+
 /// Runs `git` with `args` inside the game's folder, and gives back what git said when it fails.
 fn run_git(path: &Path, args: &[&str]) -> Result<(), ScaffoldError> {
     let output = Command::new("git")
@@ -183,16 +194,5 @@ fn run_git(path: &Path, args: &[&str]) -> Result<(), ScaffoldError> {
             String::from_utf8_lossy(&output.stderr).trim().to_string(),
         ));
     }
-    Ok(())
-}
-
-/// Rewrites `file` on disk with `edit`, one of the pure edits in `choices.rs`. When `edit` finds
-/// nothing to change, the template moved what the CLI edits, and that is reported instead of
-/// leaving the game half made.
-fn edit_file(file: &Path, edit: impl FnOnce(&str) -> Option<String>) -> Result<(), ScaffoldError> {
-    let text =
-        fs::read_to_string(file).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
-    let new_text = edit(&text).ok_or_else(|| ScaffoldError::TemplateChanged(file.to_path_buf()))?;
-    fs::write(file, new_text).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
     Ok(())
 }
