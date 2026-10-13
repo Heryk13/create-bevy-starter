@@ -2,20 +2,12 @@ use std::path::{Path, PathBuf};
 
 // ==== Types ==================================================================
 
-/// One of the cameras `3d/player` holds, which a game keeps or leaves out.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Camera {
-    FirstPerson,
-    ThirdPerson,
-    Isometric,
-}
-
 /// The kind of game to start. 2D has no variant: the menu shows it as "coming soon", and a
 /// kind the CLI cannot build should not be a value it can hold.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Kind {
     Empty,
-    ThreeD { cameras: Vec<Camera> },
+    ThreeD,
 }
 
 /// Every answer, gathered before anything is written to disk.
@@ -63,18 +55,12 @@ pub(crate) fn title_from_name(name: &str) -> String {
         .join(" ")
 }
 
-/// Returns the template branch a game of this kind is cloned from: what is not chosen does
-/// not come, so 3D with no camera is the level alone.
+/// Returns the template branch a game of this kind is cloned from. 3D is the level alone until
+/// the cameras in `3d/player` can be chosen.
 pub(crate) fn branch_for(kind: &Kind) -> &'static str {
     match kind {
         Kind::Empty => "main",
-        Kind::ThreeD { cameras } => {
-            if cameras.is_empty() {
-                "3d/base"
-            } else {
-                "3d/player"
-            }
-        }
+        Kind::ThreeD => "3d/base",
     }
 }
 
@@ -210,18 +196,8 @@ mod tests {
     }
 
     #[test]
-    fn three_d_game_with_no_cameras_starts_from_base() {
-        assert_eq!(branch_for(&Kind::ThreeD { cameras: vec![] }), "3d/base");
-    }
-
-    #[test]
-    fn three_d_game_with_cameras_starts_from_player() {
-        assert_eq!(
-            branch_for(&Kind::ThreeD {
-                cameras: vec![Camera::FirstPerson]
-            }),
-            "3d/player"
-        );
+    fn three_d_game_starts_from_base() {
+        assert_eq!(branch_for(&Kind::ThreeD), "3d/base");
     }
 
     #[test]

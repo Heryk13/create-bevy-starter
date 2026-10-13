@@ -12,13 +12,13 @@ question, the confirmation.
 
 ## What it asks
 
-| Question | Enter gives                                                          |
-| -------- | -------------------------------------------------------------------- |
-| Name     | `bevy-template`                                                      |
-| Folder   | `.`, where the command runs; the game goes into `<folder>/<name>`    |
-| Title    | from the name: `bevy-template` becomes `Bevy Template`               |
-| Kind     | Empty; 2D is coming soon                                             |
-| Cameras  | for 3D only: none, the level with a still camera                     |
+| Question    | Enter gives                                                       |
+| ----------- | ----------------------------------------------------------------- |
+| Name        | `bevy-template`                                                   |
+| Folder      | `.`, where the command runs; the game goes into `<folder>/<name>` |
+| Title       | from the name: `bevy-template` becomes `Bevy Template`            |
+| Kind        | Empty; 3D is the level with a still camera, 2D is coming soon     |
+| Multiplayer | No; Yes is coming soon                                            |
 
 ## What it does
 

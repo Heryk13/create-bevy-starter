@@ -1,8 +1,8 @@
-use inquire::{Confirm, MultiSelect, Select, Text, error::InquireResult, validator::Validation};
+use inquire::{Confirm, Select, Text, error::InquireResult, validator::Validation};
 use std::fmt::{self, Display, Formatter};
 use std::path::PathBuf;
 
-use crate::choices::{Camera, Choices, Kind, is_valid_name, project_path, title_from_name};
+use crate::choices::{Choices, Kind, is_valid_name, project_path, title_from_name};
 
 // ==== Config =================================================================
 
@@ -47,19 +47,6 @@ impl Display for MultiplayerItem {
         let label = match self {
             MultiplayerItem::No => "No",
             MultiplayerItem::Yes => "Yes (coming soon)",
-        };
-        write!(f, "{label}")
-    }
-}
-
-// the menu's words for a camera live with the questions, so `choices.rs` never decides how
-// anything looks on screen
-impl Display for Camera {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let label = match self {
-            Camera::FirstPerson => "First-person",
-            Camera::ThirdPerson => "Third-person",
-            Camera::Isometric => "Isometric",
         };
         write!(f, "{label}")
     }
@@ -130,24 +117,10 @@ fn ask_kind() -> InquireResult<Kind> {
         .prompt()?;
         match item {
             KindItem::Empty => return Ok(Kind::Empty),
-            KindItem::ThreeD => {
-                return Ok(Kind::ThreeD {
-                    cameras: ask_cameras()?,
-                });
-            }
+            KindItem::ThreeD => return Ok(Kind::ThreeD),
             KindItem::TwoD => println!("2D is coming soon. Pick Empty or 3D."),
         }
     }
-}
-
-/// Asks which cameras a 3D game keeps. None is a valid answer: the level alone, from
-/// `3d/base`.
-fn ask_cameras() -> InquireResult<Vec<Camera>> {
-    MultiSelect::new(
-        "Cameras (none = the level only, no player):",
-        vec![Camera::FirstPerson, Camera::ThirdPerson, Camera::Isometric],
-    )
-    .prompt()
 }
 
 /// Asks whether the game is multiplayer, and asks again when Yes is picked: it is shown so the
