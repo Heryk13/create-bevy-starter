@@ -14,5 +14,8 @@ test:
     cargo test
 
 # run the CLI, passing on its arguments: just run <name> <folder>
+# positional arguments hand them over untouched: pasted into the shell's text, a Windows path
+# lost its backslashes, `C:\temp` arriving as `C:temp`
+[positional-arguments]
 run *args:
-    cargo run -- {{args}}
+    cargo run -- "$@"

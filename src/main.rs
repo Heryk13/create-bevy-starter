@@ -5,14 +5,15 @@ use std::process;
 
 use crate::choices::{Choices, is_valid_name};
 
-#[expect(
-    dead_code,
-    reason = "the branch and the file edits wait for `scaffold.rs` (spec step 6)"
-)]
 mod choices;
 mod prompts;
+mod scaffold;
 
 fn main() -> InquireResult<()> {
+    if !scaffold::is_git_installed() {
+        eprintln!("Git is not installed. Please install Git to continue.");
+        process::exit(1);
+    }
     let mut args = env::args().skip(1);
     let name = args.next();
     let folder = args.next().map(PathBuf::from);
@@ -28,8 +29,13 @@ fn main() -> InquireResult<()> {
     }
 
     match ask(name, folder) {
-        // `scaffold.rs` builds the game from these choices here (spec step 6)
-        Ok(Some(_choices)) => {}
+        Ok(Some(choices)) => {
+            let result = scaffold::create_game(&choices);
+            if let Err(error) = result {
+                eprintln!("{}", error);
+                process::exit(1);
+            }
+        }
         // Esc is read as Ctrl+C: both mean the user wants out, and nothing was written yet
         Ok(None) | Err(InquireError::OperationInterrupted | InquireError::OperationCanceled) => {
             println!("Nothing was created.");
