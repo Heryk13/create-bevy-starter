@@ -25,8 +25,8 @@ question, the confirmation.
 1. Clones the template's branch for the kind chosen into `<folder>/<name>`.
 2. Deletes its `.git`: the game starts a history of its own.
 3. Sets the game's name in `Cargo.toml` and the `justfile`, and its title in `src/main.rs`.
-4. Removes what only the template needs: what is inside `docs/specs/`, and the README's
-   `## Branches` section.
+4. Removes what only the template needs: what is inside `docs/specs/` (the folder stays, with a
+   `.gitkeep`), and the README's `## Branches` section.
 5. Runs `git init` and makes a first commit.
 
 It only writes into a folder that does not exist or is empty, and if any step fails, it deletes

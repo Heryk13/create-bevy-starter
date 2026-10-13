@@ -155,11 +155,14 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     })?;
 
     // ---- what only the template needs ---------------------------------------
-    // the specs are the template's history; the folder stays, for the game's own
+    // the specs are the template's history; the folder stays for the game's own, kept by a
+    // `.gitkeep` since git drops empty folders
     let specs_dir = path.join("docs/specs");
     fs::remove_dir_all(&specs_dir)
         .map_err(|error| ScaffoldError::RemoveFailed(error.to_string()))?;
     fs::create_dir(&specs_dir).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+    fs::write(specs_dir.join(".gitkeep"), "")
+        .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
     edit_file(&path.join("README.md"), |text| {
         remove_section(text, "## Branches")
     })?;
