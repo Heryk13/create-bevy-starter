@@ -2,9 +2,16 @@
 name = "create-bevy-starter"
 version = "0.1.0"
 edition = "2024"
-# phase A: a tool for the template's author only, see bevy-starter's
-# docs/specs/create-bevy-starter/design.md
-publish = false
+# let chains, which `main.rs` and `scaffold.rs` use, are stable from 1.88
+rust-version = "1.88"
+description = "Builds a new Bevy game from the bevy-starter template, from a few questions"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Heryk13/create-bevy-starter"
+readme = "README.md"
+keywords = ["bevy", "gamedev", "template", "scaffold", "cli"]
+categories = ["command-line-utilities", "game-development"]
+# what `cargo install` needs; the rest of the repository is for working on the CLI
+include = ["src/**/*.rs", "README.md", "LICENSE-MIT", "LICENSE-APACHE"]
 
 [dependencies]
 inquire = "0.9.4"

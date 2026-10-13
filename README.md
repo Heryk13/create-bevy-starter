@@ -32,15 +32,16 @@ question, the confirmation.
 It only writes into a folder that does not exist or is empty, and if any step fails, it deletes
 the folder it made: a half-built game is worse than none.
 
-## Requirements
+## Install
 
-- [Git](https://git-scm.com/), with `user.name` and `user.email` set for the first commit.
-- [Rust](https://rustup.rs/) and [just](https://github.com/casey/just), to run it from here.
-- Access to the template's repository, which is private for now.
+```
+cargo install create-bevy-starter
+```
 
-## Usage
+It needs [Rust](https://rustup.rs/) 1.88 or newer, and [Git](https://git-scm.com/) with
+`user.name` and `user.email` set, for the game's first commit.
 
-Not published yet: it runs from this repository.
+## Working on it
 
 ```
 just run <name> <folder>
@@ -53,8 +54,9 @@ just run <name> <folder>
 | `just fix`   | applies clippy's fixes and formats the code    |
 | `just test`  | the tests only                                 |
 
-How changes are made is in [`CONTRIBUTING.md`](CONTRIBUTING.md); the design lives in
-`bevy-starter`, in `docs/specs/create-bevy-starter/design.md`.
+It needs [just](https://github.com/casey/just). How changes are made is in
+[`CONTRIBUTING.md`](CONTRIBUTING.md); the design lives in `bevy-starter`, in
+`docs/specs/create-bevy-starter/design.md`.
 
 ## License
 
