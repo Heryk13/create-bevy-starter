@@ -33,11 +33,6 @@ pub(crate) fn is_valid_name(name: &str) -> bool {
         && !name.starts_with(|c: char| c.is_ascii_digit())
 }
 
-/// Returns where the game is created: a folder named after it, inside the one the user chose.
-pub(crate) fn project_path(folder: &Path, name: &str) -> PathBuf {
-    folder.join(name)
-}
-
 /// Returns the game's title as the menu shows it, from its package name: `bevy-template`
 /// becomes `Bevy Template`.
 pub(crate) fn title_from_name(name: &str) -> String {
@@ -53,6 +48,11 @@ pub(crate) fn title_from_name(name: &str) -> String {
         })
         .collect::<Vec<String>>()
         .join(" ")
+}
+
+/// Returns where the game is created: a folder named after it, inside the one the user chose.
+pub(crate) fn project_path(folder: &Path, name: &str) -> PathBuf {
+    folder.join(name)
 }
 
 /// Returns the template branch a game of this kind is cloned from. 3D is the level alone until
@@ -155,22 +155,6 @@ mod tests {
     }
 
     #[test]
-    fn game_is_created_in_a_folder_named_after_it() {
-        assert_eq!(
-            project_path(Path::new("games"), "snake"),
-            PathBuf::from("games/snake")
-        );
-    }
-
-    #[test]
-    fn default_folder_puts_the_game_beside_where_the_command_runs() {
-        assert_eq!(
-            project_path(Path::new("."), "bevy-template"),
-            PathBuf::from("./bevy-template")
-        );
-    }
-
-    #[test]
     fn hyphens_split_the_title_into_capitalized_words() {
         assert_eq!(title_from_name("bevy-template"), "Bevy Template");
     }
@@ -188,6 +172,22 @@ mod tests {
     #[test]
     fn one_word_name_is_only_capitalized() {
         assert_eq!(title_from_name("snake"), "Snake");
+    }
+
+    #[test]
+    fn game_is_created_in_a_folder_named_after_it() {
+        assert_eq!(
+            project_path(Path::new("games"), "snake"),
+            PathBuf::from("games/snake")
+        );
+    }
+
+    #[test]
+    fn default_folder_puts_the_game_beside_where_the_command_runs() {
+        assert_eq!(
+            project_path(Path::new("."), "bevy-template"),
+            PathBuf::from("./bevy-template")
+        );
     }
 
     #[test]
