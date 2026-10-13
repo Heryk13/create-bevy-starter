@@ -55,3 +55,8 @@ just run <name> <folder>
 
 How changes are made is in [`CONTRIBUTING.md`](CONTRIBUTING.md); the design lives in
 `bevy-starter`, in `docs/specs/create-bevy-starter/design.md`.
+
+## License
+
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option,
+like Bevy itself.
