@@ -50,7 +50,7 @@ just run <name> <folder>
 | Command      | What it does                                   |
 | ------------ | ---------------------------------------------- |
 | `just run`   | runs the CLI, passing on its arguments         |
-| `just check` | formatting, lints and tests, as CI would       |
+| `just check` | formatting, lints and tests                    |
 | `just fix`   | applies clippy's fixes and formats the code    |
 | `just test`  | the tests only                                 |
 

@@ -16,7 +16,8 @@ include = ["src/**/*.rs", "README.md", "LICENSE-MIT", "LICENSE-APACHE"]
 [dependencies]
 inquire = "0.9.4"
 
-# the same lints as bevy-starter, less the ones only a Bevy game needs
+# the same lints as bevy-starter, less the ones only a Bevy game needs, and the print lints a
+# CLI has to break
 [lints.rust]
 unsafe_code = "deny"
 unused_qualifications = "warn"

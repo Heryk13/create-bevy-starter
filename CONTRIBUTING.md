@@ -80,7 +80,7 @@ The character tells the kind of boundary:
 
 ### Naming
 
-- Functions say what they give back or do (`branch_for`, `title_from_name`, `clone_template`).
+- Functions say what they give back or do (`branch_for`, `title_from_name`, `create_game`).
 - Constants: `SCREAMING_SNAKE_CASE`, with the unit in the name when there is one.
 
 ## Tests
@@ -99,7 +99,7 @@ The character tells the kind of boundary:
 ## Commits
 
 - [Conventional Commits](https://www.conventionalcommits.org/), in English, imperative, short title:
-  `feat: ask for the cameras`, `fix: ...`, `refactor: ...`, `test: ...`, `docs: ...`, `build: ...`.
+  `feat: ask for the title`, `fix: ...`, `refactor: ...`, `test: ...`, `docs: ...`, `build: ...`.
 - One change per commit.
 - `git commit --amend` only before pushing.
 
