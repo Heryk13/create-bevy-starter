@@ -2,12 +2,12 @@ use std::path::{Path, PathBuf};
 
 // ==== Types ==================================================================
 
-/// The kind of game to start. 2D has no variant: the menu shows it as "coming soon", and a
-/// kind the CLI cannot build should not be a value it can hold.
+/// The kind of game to start.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Kind {
     Empty,
     ThreeD,
+    TwoD,
 }
 
 /// Every answer, gathered before anything is written to disk.
@@ -56,11 +56,12 @@ pub(crate) fn project_path(folder: &Path, name: &str) -> PathBuf {
 }
 
 /// Returns the template branch a game of this kind is cloned from. 3D is the level alone until
-/// the cameras in `3d/player` can be chosen.
+/// the cameras in `3d/player` can be chosen, and 2D the room alone.
 pub(crate) fn branch_for(kind: &Kind) -> &'static str {
     match kind {
         Kind::Empty => "main",
         Kind::ThreeD => "3d/base",
+        Kind::TwoD => "2d/base",
     }
 }
 
@@ -198,6 +199,11 @@ mod tests {
     #[test]
     fn three_d_game_starts_from_base() {
         assert_eq!(branch_for(&Kind::ThreeD), "3d/base");
+    }
+
+    #[test]
+    fn two_d_game_starts_from_base() {
+        assert_eq!(branch_for(&Kind::TwoD), "2d/base");
     }
 
     #[test]

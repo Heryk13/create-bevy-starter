@@ -11,10 +11,9 @@ pub(crate) const NAME_RULE: &str = "Use ASCII letters, digits, - and _, not star
 
 // ==== Types ==================================================================
 
-// CONTRIBUTING gives a choice the CLI cannot build no variant, and `KindItem::TwoD` and
-// `MultiplayerItem::Yes` are such choices: the menus have to show them as coming soon. They
-// never leave this file: their question asks again when one is picked, and hands back only
-// what the CLI can build
+// CONTRIBUTING gives a choice the CLI cannot build no variant, and `MultiplayerItem::Yes` is
+// such a choice: the menu has to show it as coming soon. It never leaves this file: its
+// question asks again when it is picked, and hands back only what the CLI can build
 
 /// One line of the kind menu.
 #[derive(Clone, Copy)]
@@ -29,7 +28,7 @@ impl Display for KindItem {
         let label = match self {
             KindItem::Empty => "Empty",
             KindItem::ThreeD => "3D",
-            KindItem::TwoD => "2D (coming soon)",
+            KindItem::TwoD => "2D",
         };
         write!(f, "{label}")
     }
@@ -106,21 +105,18 @@ fn ask_title(name: &str) -> InquireResult<String> {
     Text::new("Game title:").with_default(&default).prompt()
 }
 
-/// Asks what kind of game to start, and asks again when 2D is picked: it is shown, but it
-/// cannot be built yet.
+/// Asks what kind of game to start.
 fn ask_kind() -> InquireResult<Kind> {
-    loop {
-        let item = Select::new(
-            "Kind:",
-            vec![KindItem::Empty, KindItem::ThreeD, KindItem::TwoD],
-        )
-        .prompt()?;
-        match item {
-            KindItem::Empty => return Ok(Kind::Empty),
-            KindItem::ThreeD => return Ok(Kind::ThreeD),
-            KindItem::TwoD => println!("2D is coming soon. Pick Empty or 3D."),
-        }
-    }
+    let item = Select::new(
+        "Kind:",
+        vec![KindItem::Empty, KindItem::ThreeD, KindItem::TwoD],
+    )
+    .prompt()?;
+    Ok(match item {
+        KindItem::Empty => Kind::Empty,
+        KindItem::ThreeD => Kind::ThreeD,
+        KindItem::TwoD => Kind::TwoD,
+    })
 }
 
 /// Asks whether the game is multiplayer, and asks again when Yes is picked: it is shown so the

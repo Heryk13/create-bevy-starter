@@ -17,7 +17,7 @@ question, the confirmation.
 | Name        | `bevy-template`                                                   |
 | Folder      | `.`, where the command runs; the game goes into `<folder>/<name>` |
 | Title       | from the name: `bevy-template` becomes `Bevy Template`            |
-| Kind        | Empty; 3D is the level with a still camera, 2D is coming soon     |
+| Kind        | Empty; 3D is the level with a still camera, 2D the room in tiles  |
 | Multiplayer | No; Yes is coming soon                                            |
 
 ## What it does
