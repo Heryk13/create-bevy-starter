@@ -2,7 +2,7 @@ use inquire::{Confirm, Select, Text, error::InquireResult, validator::Validation
 use std::fmt::{self, Display, Formatter};
 use std::path::PathBuf;
 
-use crate::choices::{Choices, Kind, is_valid_name, project_path, title_from_name};
+use crate::choices::{Camera, Choices, Kind, is_valid_name, project_path, title_from_name};
 
 // ==== Config =================================================================
 
@@ -11,9 +11,10 @@ pub(crate) const NAME_RULE: &str = "Use ASCII letters, digits, - and _, not star
 
 // ==== Types ==================================================================
 
-// CONTRIBUTING gives a choice the CLI cannot build no variant, and `MultiplayerItem::Yes` is
-// such a choice: the menu has to show it as coming soon. It never leaves this file: its
-// question asks again when it is picked, and hands back only what the CLI can build
+// CONTRIBUTING gives a choice the CLI cannot build no variant, and `MultiplayerItem::Yes`,
+// `CameraItem::ThirdPerson` and `CameraItem::Isometric` are such choices: the menu has to show
+// them as coming soon. They never leave this file: their questions ask again when one is
+// picked, and hand back only what the CLI can build
 
 /// One line of the kind menu.
 #[derive(Clone, Copy)]
@@ -29,6 +30,27 @@ impl Display for KindItem {
             KindItem::Empty => "Empty",
             KindItem::ThreeD => "3D",
             KindItem::TwoD => "2D",
+        };
+        write!(f, "{label}")
+    }
+}
+
+/// One line of the camera menu, asked of a 3D game.
+#[derive(Clone, Copy)]
+enum CameraItem {
+    None,
+    FirstPerson,
+    ThirdPerson,
+    Isometric,
+}
+
+impl Display for CameraItem {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let label = match self {
+            CameraItem::None => "None",
+            CameraItem::FirstPerson => "First person",
+            CameraItem::ThirdPerson => "Third person (coming soon)",
+            CameraItem::Isometric => "Isometric (coming soon)",
         };
         write!(f, "{label}")
     }
@@ -105,7 +127,7 @@ fn ask_title(name: &str) -> InquireResult<String> {
     Text::new("Game title:").with_default(&default).prompt()
 }
 
-/// Asks what kind of game to start.
+/// Asks what kind of game to start, and of a 3D one, its camera.
 fn ask_kind() -> InquireResult<Kind> {
     let item = Select::new(
         "Kind:",
@@ -114,9 +136,34 @@ fn ask_kind() -> InquireResult<Kind> {
     .prompt()?;
     Ok(match item {
         KindItem::Empty => Kind::Empty,
-        KindItem::ThreeD => Kind::ThreeD,
+        KindItem::ThreeD => Kind::ThreeD(ask_camera()?),
         KindItem::TwoD => Kind::TwoD,
     })
+}
+
+/// Asks which camera a 3D game starts with, None being the level alone, and asks again when
+/// one that is coming soon is picked: they are shown so the user knows they are coming, but
+/// they cannot be built yet.
+fn ask_camera() -> InquireResult<Option<Camera>> {
+    loop {
+        let item = Select::new(
+            "Camera:",
+            vec![
+                CameraItem::None,
+                CameraItem::FirstPerson,
+                CameraItem::ThirdPerson,
+                CameraItem::Isometric,
+            ],
+        )
+        .prompt()?;
+        match item {
+            CameraItem::None => return Ok(None),
+            CameraItem::FirstPerson => return Ok(Some(Camera::FirstPerson)),
+            CameraItem::ThirdPerson | CameraItem::Isometric => {
+                println!("That camera is coming soon. Pick another.");
+            }
+        }
+    }
 }
 
 /// Asks whether the game is multiplayer, and asks again when Yes is picked: it is shown so the

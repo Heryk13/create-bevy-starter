@@ -12,17 +12,28 @@ question, the confirmation.
 
 ## What it asks
 
-| Question    | Enter gives                                                       |
-| ----------- | ----------------------------------------------------------------- |
-| Name        | `bevy-template`                                                   |
-| Folder      | `.`, where the command runs; the game goes into `<folder>/<name>` |
-| Title       | from the name: `bevy-template` becomes `Bevy Template`            |
-| Kind        | Empty; 3D is the level with a still camera, 2D the room in tiles  |
-| Multiplayer | No; Yes is coming soon                                            |
+| Question    | Enter gives                                                                    |
+| ----------- | ------------------------------------------------------------------------------ |
+| Name        | `bevy-template`                                                                |
+| Folder      | `.`, where the command runs; the game goes into `<folder>/<name>`              |
+| Title       | from the name: `bevy-template` becomes `Bevy Template`                         |
+| Kind        | Empty; 3D is a test level, 2D a room in tiles                                  |
+| Camera      | asked of a 3D game. None, the level under a still camera; First person adds    |
+|             | physics and a player walking it; Third person and Isometric are coming soon    |
+| Multiplayer | No; Yes is coming soon                                                         |
+
+The answers pick the template branch the game is cloned from:
+
+| Kind  | Camera       | Branch      |
+| ----- | ------------ | ----------- |
+| Empty |              | `main`      |
+| 3D    | None         | `3d/base`   |
+| 3D    | First person | `3d/player` |
+| 2D    |              | `2d/base`   |
 
 ## What it does
 
-1. Clones the template's branch for the kind chosen into `<folder>/<name>`.
+1. Clones the template's branch for the kind and camera chosen into `<folder>/<name>`.
 2. Deletes its `.git`: the game starts a history of its own.
 3. Sets the game's name in `Cargo.toml` and the `justfile`, and its title in `src/main.rs`.
 4. Removes what only the template needs: what is inside `docs/specs/` (the folder stays, with a

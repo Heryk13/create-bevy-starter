@@ -2,11 +2,18 @@ use std::path::{Path, PathBuf};
 
 // ==== Types ==================================================================
 
-/// The kind of game to start.
+/// The camera a 3D game starts with, and with it the player that carries it. Only the cameras
+/// the template has: the ones still to come are lines of the menu in `prompts.rs`, nothing more.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Camera {
+    FirstPerson,
+}
+
+/// The kind of game to start. A 3D game without a camera is the level alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Kind {
     Empty,
-    ThreeD,
+    ThreeD(Option<Camera>),
     TwoD,
 }
 
@@ -55,12 +62,13 @@ pub(crate) fn project_path(folder: &Path, name: &str) -> PathBuf {
     folder.join(name)
 }
 
-/// Returns the template branch a game of this kind is cloned from. 3D is the level alone until
-/// the cameras in `3d/player` can be chosen, and 2D the room alone.
+/// Returns the template branch a game of this kind is cloned from. A 3D game with a camera
+/// comes from `3d/player`, whole: with a single camera there, nothing has to be removed yet.
 pub(crate) fn branch_for(kind: &Kind) -> &'static str {
     match kind {
         Kind::Empty => "main",
-        Kind::ThreeD => "3d/base",
+        Kind::ThreeD(None) => "3d/base",
+        Kind::ThreeD(Some(Camera::FirstPerson)) => "3d/player",
         Kind::TwoD => "2d/base",
     }
 }
@@ -197,8 +205,16 @@ mod tests {
     }
 
     #[test]
-    fn three_d_game_starts_from_base() {
-        assert_eq!(branch_for(&Kind::ThreeD), "3d/base");
+    fn three_d_game_without_a_camera_starts_from_base() {
+        assert_eq!(branch_for(&Kind::ThreeD(None)), "3d/base");
+    }
+
+    #[test]
+    fn three_d_game_in_first_person_starts_from_player() {
+        assert_eq!(
+            branch_for(&Kind::ThreeD(Some(Camera::FirstPerson))),
+            "3d/player"
+        );
     }
 
     #[test]
