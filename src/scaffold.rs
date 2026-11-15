@@ -12,6 +12,10 @@ const TEMPLATE_URL: &str = "https://github.com/Heryk13/bevy-starter.git";
 /// The message of the game's first commit, in the template's Conventional Commits style.
 const FIRST_COMMIT_MESSAGE: &str = "build: start from bevy-starter";
 
+/// The heading of the section about the template's branch tree, the same in `README.md` and in
+/// `CONTRIBUTING.md`.
+const BRANCHES_HEADING: &str = "## Branches";
+
 // ==== Types ==================================================================
 
 /// Why a game could not be created. Each variant is a failure the CLI can meet and tell apart.
@@ -163,9 +167,13 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     fs::create_dir(&specs_dir).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
     fs::write(specs_dir.join(".gitkeep"), "")
         .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
-    edit_file(&path.join("README.md"), |text| {
-        remove_section(text, "## Branches")
-    })?;
+    // a game has no branch tree: the README's section lists the template's branches, and
+    // CONTRIBUTING's holds their rules and the tools that keep them in step
+    for file in ["README.md", "CONTRIBUTING.md"] {
+        edit_file(&path.join(file), |text| {
+            remove_section(text, BRANCHES_HEADING)
+        })?;
+    }
     remove_tools(path)?;
 
     // ---- a history of its own -----------------------------------------------
