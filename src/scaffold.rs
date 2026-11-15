@@ -166,6 +166,7 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     edit_file(&path.join("README.md"), |text| {
         remove_section(text, "## Branches")
     })?;
+    remove_tools(path)?;
 
     // ---- a history of its own -----------------------------------------------
     run_git(path, &["init"])?;
@@ -185,6 +186,17 @@ fn edit_file(file: &Path, edit: impl FnOnce(&str) -> Option<String>) -> Result<(
     Ok(())
 }
 
+/// Removes the template's `tools/` from the game at `path`: they commit and merge down the
+/// template's branch tree, which a game does not have. A template without the folder is left
+/// as it is, since none of its branches had one before the tools were written.
+fn remove_tools(path: &Path) -> Result<(), ScaffoldError> {
+    let tools_dir = path.join("tools");
+    if !tools_dir.exists() {
+        return Ok(());
+    }
+    fs::remove_dir_all(tools_dir).map_err(|error| ScaffoldError::RemoveFailed(error.to_string()))
+}
+
 /// Runs `git` with `args` inside the game's folder, and gives back what git said when it fails.
 fn run_git(path: &Path, args: &[&str]) -> Result<(), ScaffoldError> {
     let output = Command::new("git")
@@ -198,4 +210,37 @@ fn run_git(path: &Path, args: &[&str]) -> Result<(), ScaffoldError> {
         ));
     }
     Ok(())
+}
+
+// ==== Tests ==================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Returns an empty folder of the test's own under the system's temporary one, so tests
+    /// running in parallel share no files and an earlier run leaves none behind.
+    fn fresh_test_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(name);
+        // a folder that is not there yet is the usual case, and nothing to report
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("the test folder can be created");
+        dir
+    }
+
+    #[test]
+    fn a_game_keeps_no_tools_folder() {
+        let game = fresh_test_dir("create-bevy-starter-tools-removed");
+        fs::create_dir(game.join("tools")).expect("the tools folder can be created");
+        fs::write(game.join("tools/sync.sh"), "").expect("a tool can be written");
+        assert!(remove_tools(&game).is_ok());
+        assert!(!game.join("tools").exists());
+    }
+
+    #[test]
+    fn a_template_without_tools_still_makes_a_game() {
+        let game = fresh_test_dir("create-bevy-starter-no-tools");
+        assert!(remove_tools(&game).is_ok());
+        assert!(game.exists());
+    }
 }
