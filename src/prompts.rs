@@ -56,6 +56,23 @@ impl Display for CameraItem {
     }
 }
 
+/// One line of the player menu, asked of a 2D game.
+#[derive(Clone, Copy)]
+enum PlayerItem {
+    None,
+    TopDownSquare,
+}
+
+impl Display for PlayerItem {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let label = match self {
+            PlayerItem::None => "None",
+            PlayerItem::TopDownSquare => "Top-down square",
+        };
+        write!(f, "{label}")
+    }
+}
+
 /// One line of the multiplayer menu.
 #[derive(Clone, Copy)]
 enum MultiplayerItem {
@@ -127,7 +144,7 @@ fn ask_title(name: &str) -> InquireResult<String> {
     Text::new("Game title:").with_default(&default).prompt()
 }
 
-/// Asks what kind of game to start, and of a 3D one, its camera.
+/// Asks what kind of game to start, of a 3D one its camera, and of a 2D one its player.
 fn ask_kind() -> InquireResult<Kind> {
     let item = Select::new(
         "Kind:",
@@ -137,8 +154,16 @@ fn ask_kind() -> InquireResult<Kind> {
     Ok(match item {
         KindItem::Empty => Kind::Empty,
         KindItem::ThreeD => Kind::ThreeD(ask_camera()?),
-        KindItem::TwoD => Kind::TwoD,
+        KindItem::TwoD => Kind::TwoD(ask_player()?),
     })
+}
+
+/// Asks whether a 2D game starts with a player, a square that walks the room, or with the
+/// room alone.
+fn ask_player() -> InquireResult<bool> {
+    let item =
+        Select::new("Player:", vec![PlayerItem::None, PlayerItem::TopDownSquare]).prompt()?;
+    Ok(matches!(item, PlayerItem::TopDownSquare))
 }
 
 /// Asks which camera a 3D game starts with, None being the level alone, and asks again when

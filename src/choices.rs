@@ -9,12 +9,13 @@ pub(crate) enum Camera {
     FirstPerson,
 }
 
-/// The kind of game to start. A 3D game without a camera is the level alone.
+/// The kind of game to start. A 3D game without a camera is the level alone, and a 2D game
+/// without the player, `TwoD(false)`, the room alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Kind {
     Empty,
     ThreeD(Option<Camera>),
-    TwoD,
+    TwoD(bool),
 }
 
 /// Every answer, gathered before anything is written to disk.
@@ -64,12 +65,14 @@ pub(crate) fn project_path(folder: &Path, name: &str) -> PathBuf {
 
 /// Returns the template branch a game of this kind is cloned from. A 3D game with a camera
 /// comes from `3d/player`, whole: with a single camera there, nothing has to be removed yet.
+/// A 2D game with the player comes from `2d/player`.
 pub(crate) fn branch_for(kind: &Kind) -> &'static str {
     match kind {
         Kind::Empty => "main",
         Kind::ThreeD(None) => "3d/base",
         Kind::ThreeD(Some(Camera::FirstPerson)) => "3d/player",
-        Kind::TwoD => "2d/base",
+        Kind::TwoD(false) => "2d/base",
+        Kind::TwoD(true) => "2d/player",
     }
 }
 
@@ -218,8 +221,13 @@ mod tests {
     }
 
     #[test]
-    fn two_d_game_starts_from_base() {
-        assert_eq!(branch_for(&Kind::TwoD), "2d/base");
+    fn two_d_game_without_the_player_starts_from_base() {
+        assert_eq!(branch_for(&Kind::TwoD(false)), "2d/base");
+    }
+
+    #[test]
+    fn two_d_game_with_the_player_starts_from_player() {
+        assert_eq!(branch_for(&Kind::TwoD(true)), "2d/player");
     }
 
     #[test]

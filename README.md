@@ -20,20 +20,23 @@ question, the confirmation.
 | Kind        | Empty; 3D is a test level, 2D a room in tiles                                  |
 | Camera      | asked of a 3D game. None, the level under a still camera; First person adds    |
 |             | physics and a player walking it; Third person and Isometric are coming soon    |
+| Player      | asked of a 2D game. None, the room alone; Top-down square adds a square that   |
+|             | walks it, the camera following                                                 |
 | Multiplayer | No; Yes is coming soon                                                         |
 
 The answers pick the template branch the game is cloned from:
 
-| Kind  | Camera       | Branch      |
-| ----- | ------------ | ----------- |
-| Empty |              | `main`      |
-| 3D    | None         | `3d/base`   |
-| 3D    | First person | `3d/player` |
-| 2D    |              | `2d/base`   |
+| Kind  | Camera or player | Branch      |
+| ----- | ---------------- | ----------- |
+| Empty |                  | `main`      |
+| 3D    | None             | `3d/base`   |
+| 3D    | First person     | `3d/player` |
+| 2D    | None             | `2d/base`   |
+| 2D    | Top-down square  | `2d/player` |
 
 ## What it does
 
-1. Clones the template's branch for the kind and camera chosen into `<folder>/<name>`.
+1. Clones the template's branch for the kind, camera and player chosen into `<folder>/<name>`.
 2. Deletes its `.git`: the game starts a history of its own.
 3. Sets the game's name in `Cargo.toml` and the `justfile`, and its title in `src/main.rs`.
 4. Removes what only the template needs: what is inside `docs/specs/` (the folder stays, with a
