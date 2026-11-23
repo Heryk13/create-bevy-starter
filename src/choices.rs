@@ -1,20 +1,58 @@
 use std::path::{Path, PathBuf};
 
+// ==== Config =================================================================
+
+// ---- what a game may leave out, as the template marks it --------------------
+// `others.rs` is in the player branches only: a file that is not there is skipped
+pub(crate) const MULTIPLAYER: Removal = Removal {
+    marker: "multiplayer",
+    files: &[
+        "src/multiplayer.rs",
+        "src/multiplayer",
+        "src/screens/gameplay/player/others.rs",
+    ],
+};
+pub(crate) const FIRST_PERSON: Removal = Removal {
+    marker: "camera: first-person",
+    files: &["src/screens/gameplay/player/first_person.rs"],
+};
+pub(crate) const THIRD_PERSON: Removal = Removal {
+    marker: "camera: third-person",
+    files: &["src/screens/gameplay/player/third_person.rs"],
+};
+pub(crate) const CAMERA_SWITCH: Removal = Removal {
+    marker: "camera: switch",
+    files: &["src/screens/gameplay/player/camera_switch.rs"],
+};
+pub(crate) const SPLIT_SCREEN: Removal = Removal {
+    marker: "split screen",
+    files: &["src/screens/gameplay/player/split_screen.rs"],
+};
+
 // ==== Types ==================================================================
 
-/// The camera a 3D game starts with, and with it the player that carries it. Only the cameras
-/// the template has: the ones still to come are lines of the menu in `prompts.rs`, nothing more.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A camera a 3D game's player can have. Only the cameras the template has: the ones still to
+/// come are lines of the menu in `prompts.rs`, nothing more.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Camera {
     FirstPerson,
+    ThirdPerson,
 }
 
-/// The kind of game to start. A 3D game without a camera is the level alone, and a 2D game
+/// The player of a 3D game: its cameras, one or more (F5 switches between two), and whether a
+/// second player on a gamepad can split the screen with it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Player3d {
+    pub(crate) cameras: Vec<Camera>,
+    pub(crate) split_screen: bool,
+}
+
+/// The kind of game to start. A 3D game without a player is the level alone, and a 2D game
 /// without the player, `TwoD(false)`, the room alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Kind {
     Empty,
-    ThreeD(Option<Camera>),
+    ThreeD(Option<Player3d>),
     TwoD(bool),
 }
 
@@ -25,6 +63,16 @@ pub(crate) struct Choices {
     pub(crate) title: String,
     pub(crate) folder: PathBuf,
     pub(crate) kind: Kind,
+    pub(crate) multiplayer: bool,
+}
+
+/// Something of the template a game may leave out: the files that are it, and the marker that
+/// ends every line outside them naming it (`// <marker>`, or `# <marker>` in `Cargo.toml`).
+/// Deleting both leaves a game that builds without it, as the template promises.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Removal {
+    pub(crate) marker: &'static str,
+    pub(crate) files: &'static [&'static str],
 }
 
 // ==== Helpers ================================================================
@@ -63,17 +111,42 @@ pub(crate) fn project_path(folder: &Path, name: &str) -> PathBuf {
     folder.join(name)
 }
 
-/// Returns the template branch a game of this kind is cloned from. A 3D game with a camera
-/// comes from `3d/player`, whole: with a single camera there, nothing has to be removed yet.
-/// A 2D game with the player comes from `2d/player`.
+/// Returns the template branch a game of this kind is cloned from. A 3D game with a player
+/// comes from `3d/player`, which has every camera, and `removals_for` takes out the ones not
+/// chosen. A 2D game with the player comes from `2d/player`.
 pub(crate) fn branch_for(kind: &Kind) -> &'static str {
     match kind {
         Kind::Empty => "main",
         Kind::ThreeD(None) => "3d/base",
-        Kind::ThreeD(Some(Camera::FirstPerson)) => "3d/player",
+        Kind::ThreeD(Some(_)) => "3d/player",
         Kind::TwoD(false) => "2d/base",
         Kind::TwoD(true) => "2d/player",
     }
+}
+
+/// Returns what the cloned branch has that the game was not given: multiplayer unless chosen,
+/// in every kind; and in a 3D game with a player, each camera not chosen, F5's switch with
+/// fewer than two, and the split screen unless chosen.
+pub(crate) fn removals_for(choices: &Choices) -> Vec<Removal> {
+    let mut removals = Vec::new();
+    if !choices.multiplayer {
+        removals.push(MULTIPLAYER);
+    }
+    if let Kind::ThreeD(Some(player)) = &choices.kind {
+        if !player.cameras.contains(&Camera::FirstPerson) {
+            removals.push(FIRST_PERSON);
+        }
+        if !player.cameras.contains(&Camera::ThirdPerson) {
+            removals.push(THIRD_PERSON);
+        }
+        if player.cameras.len() < 2 {
+            removals.push(CAMERA_SWITCH);
+        }
+        if !player.split_screen {
+            removals.push(SPLIT_SCREEN);
+        }
+    }
+    removals
 }
 
 // ---- file edits: text in, text out ------------------------------------------
@@ -128,6 +201,25 @@ pub(crate) fn remove_section(text: &str, heading: &str) -> Option<String> {
         }
         Some(new_text)
     }
+}
+
+/// Returns `text` without the lines that end with `marker` as a comment, `// marker` in Rust or
+/// `# marker` in TOML, and whether any was dropped. The comment is matched whole, so
+/// `camera: first-person` never takes a line marked `camera: first`.
+pub(crate) fn remove_marked_lines(text: &str, marker: &str) -> (String, bool) {
+    let rust = format!("// {marker}");
+    let toml = format!("# {marker}");
+    let marked = |line: &&str| {
+        let line = line.trim_end();
+        line.ends_with(&rust) || line.ends_with(&toml)
+    };
+    let kept: Vec<&str> = text.lines().filter(|line| !marked(line)).collect();
+    let dropped = kept.len() != text.lines().count();
+    let mut new_text = kept.join("\n");
+    if text.ends_with('\n') && !new_text.is_empty() {
+        new_text.push('\n');
+    }
+    (new_text, dropped)
 }
 
 // ==== Tests ==================================================================
@@ -213,10 +305,83 @@ mod tests {
     }
 
     #[test]
-    fn three_d_game_in_first_person_starts_from_player() {
+    fn three_d_game_with_a_player_starts_from_player() {
         assert_eq!(
-            branch_for(&Kind::ThreeD(Some(Camera::FirstPerson))),
+            branch_for(&Kind::ThreeD(Some(player(&[Camera::ThirdPerson], false)))),
             "3d/player"
+        );
+    }
+
+    /// Returns a 3D player with these cameras, and a split screen or not.
+    fn player(cameras: &[Camera], split_screen: bool) -> Player3d {
+        Player3d {
+            cameras: cameras.to_vec(),
+            split_screen,
+        }
+    }
+
+    /// Returns the choices of a game of `kind`, with multiplayer or not.
+    fn choices(kind: Kind, multiplayer: bool) -> Choices {
+        Choices {
+            name: "game".to_string(),
+            title: "Game".to_string(),
+            folder: PathBuf::from("."),
+            kind,
+            multiplayer,
+        }
+    }
+
+    #[test]
+    fn a_game_with_everything_removes_nothing() {
+        let both = player(&[Camera::FirstPerson, Camera::ThirdPerson], true);
+        assert!(removals_for(&choices(Kind::ThreeD(Some(both)), true)).is_empty());
+    }
+
+    #[test]
+    fn a_game_without_multiplayer_loses_it_whatever_its_kind() {
+        for kind in [
+            Kind::Empty,
+            Kind::ThreeD(None),
+            Kind::TwoD(false),
+            Kind::TwoD(true),
+        ] {
+            assert_eq!(removals_for(&choices(kind, false)), vec![MULTIPLAYER]);
+        }
+    }
+
+    #[test]
+    fn one_camera_loses_the_other_and_the_switch() {
+        let first = player(&[Camera::FirstPerson], true);
+        assert_eq!(
+            removals_for(&choices(Kind::ThreeD(Some(first)), true)),
+            vec![THIRD_PERSON, CAMERA_SWITCH]
+        );
+    }
+
+    #[test]
+    fn a_player_without_a_split_screen_loses_it() {
+        let both = player(&[Camera::FirstPerson, Camera::ThirdPerson], false);
+        assert_eq!(
+            removals_for(&choices(Kind::ThreeD(Some(both)), true)),
+            vec![SPLIT_SCREEN]
+        );
+    }
+
+    #[test]
+    fn marked_lines_go_and_the_rest_stays() {
+        let text = "mod a; // multiplayer\nmod b;\nlightyear = \"0.31\" # multiplayer\n";
+        assert_eq!(
+            remove_marked_lines(text, "multiplayer"),
+            ("mod b;\n".to_string(), true)
+        );
+    }
+
+    #[test]
+    fn a_marker_is_matched_whole() {
+        let text = "mod first_person; // camera: first-person\n";
+        assert_eq!(
+            remove_marked_lines(text, "camera: first"),
+            (text.to_string(), false)
         );
     }
 

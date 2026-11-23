@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fmt, fs};
 
-use crate::choices::{Choices, branch_for, project_path, remove_section, replace_line};
+use crate::choices::{
+    Choices, Removal, branch_for, project_path, removals_for, remove_marked_lines, remove_section,
+    replace_line,
+};
 
 // ==== Config =================================================================
 
@@ -176,6 +179,15 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     }
     remove_tools(path)?;
 
+    // ---- what the game was not given ----------------------------------------
+    let removals = removals_for(choices);
+    for removal in &removals {
+        remove_left_out(path, removal)?;
+    }
+    if !removals.is_empty() {
+        tidy_after_removals(path);
+    }
+
     // ---- a history of its own -----------------------------------------------
     run_git(path, &["init"])?;
     run_git(path, &["add", "--all"])?;
@@ -203,6 +215,71 @@ fn remove_tools(path: &Path) -> Result<(), ScaffoldError> {
         return Ok(());
     }
     fs::remove_dir_all(tools_dir).map_err(|error| ScaffoldError::RemoveFailed(error.to_string()))
+}
+
+/// Removes from the game at `path` what it was not given: `removal`'s files, and every line
+/// carrying its marker in `Cargo.toml` and the Rust sources. A removal none of whose files is
+/// there means the template moved them, and the game would keep what was left out.
+fn remove_left_out(path: &Path, removal: &Removal) -> Result<(), ScaffoldError> {
+    let mut found = false;
+    for file in removal.files {
+        let file = path.join(file);
+        let removed = if file.is_dir() {
+            fs::remove_dir_all(&file)
+        } else if file.is_file() {
+            fs::remove_file(&file)
+        } else {
+            continue;
+        };
+        removed.map_err(|error| ScaffoldError::RemoveFailed(error.to_string()))?;
+        found = true;
+    }
+    if !found {
+        let first = removal.files.first().copied().unwrap_or_default();
+        return Err(ScaffoldError::TemplateChanged(path.join(first)));
+    }
+    let mut sources = vec![path.join("Cargo.toml")];
+    collect_rust_files(&path.join("src"), &mut sources)?;
+    for source in sources {
+        let text = fs::read_to_string(&source)
+            .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+        let (new_text, dropped) = remove_marked_lines(&text, removal.marker);
+        if dropped {
+            fs::write(&source, new_text)
+                .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Adds every `.rs` file under `dir`, at any depth, to `files`.
+fn collect_rust_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScaffoldError> {
+    let entries =
+        fs::read_dir(dir).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            collect_rust_files(&entry_path, files)?;
+        } else if entry_path
+            .extension()
+            .is_some_and(|extension| extension == "rs")
+        {
+            files.push(entry_path);
+        }
+    }
+    Ok(())
+}
+
+/// Leaves the game as its own `just check` wants it once lines are gone: formatted again, since
+/// a call whose marked argument went can now fit one line, or end without its comma; and its
+/// `Cargo.lock` without the crates only what was left out needed, which asking cargo for the
+/// game's metadata drops, updating nothing else. Best effort: the game builds either way, and a
+/// cargo that cannot run here is no reason to fail.
+fn tidy_after_removals(path: &Path) {
+    for args in [&["fmt"][..], &["metadata", "--format-version", "1"]] {
+        let _ = Command::new("cargo").args(args).current_dir(path).output();
+    }
 }
 
 /// Runs `git` with `args` inside the game's folder, and gives back what git said when it fails.
@@ -250,5 +327,113 @@ mod tests {
         let game = fresh_test_dir("create-bevy-starter-no-tools");
         assert!(remove_tools(&game).is_ok());
         assert!(game.exists());
+    }
+
+    #[test]
+    fn what_is_left_out_goes_with_its_lines() {
+        let game = fresh_test_dir("create-bevy-starter-left-out");
+        fs::create_dir_all(game.join("src/multiplayer")).expect("a folder can be created");
+        fs::write(game.join("src/multiplayer.rs"), "").expect("a file can be written");
+        fs::write(
+            game.join("src/main.rs"),
+            "mod multiplayer; // multiplayer\nmod ui;\n",
+        )
+        .expect("a file can be written");
+        fs::write(
+            game.join("Cargo.toml"),
+            "[dependencies]\nlightyear = \"0.31\" # multiplayer\n",
+        )
+        .expect("a file can be written");
+        assert!(remove_left_out(&game, &crate::choices::MULTIPLAYER).is_ok());
+        assert!(!game.join("src/multiplayer.rs").exists());
+        assert!(!game.join("src/multiplayer").exists());
+        let main = fs::read_to_string(game.join("src/main.rs")).expect("main.rs is there");
+        assert_eq!(main, "mod ui;\n");
+        let manifest = fs::read_to_string(game.join("Cargo.toml")).expect("Cargo.toml is there");
+        assert_eq!(manifest, "[dependencies]\n");
+    }
+
+    #[test]
+    fn a_removal_whose_files_moved_is_refused() {
+        let game = fresh_test_dir("create-bevy-starter-moved");
+        fs::create_dir(game.join("src")).expect("a folder can be created");
+        assert!(matches!(
+            remove_left_out(&game, &crate::choices::MULTIPLAYER),
+            Err(ScaffoldError::TemplateChanged(_))
+        ));
+    }
+
+    // ---- every combination: `just check-combos` -----------------------------
+
+    /// Returns the choices of every game the CLI can make, each in a folder of its own under
+    /// `folder`.
+    fn every_combination(folder: &Path) -> Vec<Choices> {
+        use crate::choices::{Camera, Kind, Player3d};
+        let mut kinds = vec![
+            Kind::Empty,
+            Kind::ThreeD(None),
+            Kind::TwoD(false),
+            Kind::TwoD(true),
+        ];
+        let camera_sets = [
+            vec![Camera::FirstPerson],
+            vec![Camera::ThirdPerson],
+            vec![Camera::FirstPerson, Camera::ThirdPerson],
+        ];
+        for cameras in camera_sets {
+            for split_screen in [false, true] {
+                kinds.push(Kind::ThreeD(Some(Player3d {
+                    cameras: cameras.clone(),
+                    split_screen,
+                })));
+            }
+        }
+        let mut every = Vec::new();
+        for kind in kinds {
+            for multiplayer in [false, true] {
+                let name = format!("combo-{}", every.len() + 1);
+                every.push(Choices {
+                    title: name.clone(),
+                    name,
+                    folder: folder.to_path_buf(),
+                    kind: kind.clone(),
+                    multiplayer,
+                });
+            }
+        }
+        every
+    }
+
+    #[test]
+    #[ignore = "clones the template and runs each game's `just check`, for an hour or so: \
+                `just check-combos`"]
+    fn every_combination_passes_the_games_own_check() {
+        let folder = fresh_test_dir("create-bevy-starter-combos");
+        // one for every game, so Bevy is built once, not once a game
+        let target = std::env::temp_dir().join("create-bevy-starter-combos-target");
+        let mut failed = Vec::new();
+        for choices in every_combination(&folder) {
+            let label = format!(
+                "{}: {:?}, multiplayer {}",
+                choices.name, choices.kind, choices.multiplayer
+            );
+            println!("==== {label}");
+            if let Err(error) = create_game(&choices) {
+                failed.push(format!("{label}: {error}"));
+                continue;
+            }
+            let checked = Command::new("just")
+                .arg("check")
+                .current_dir(project_path(&choices.folder, &choices.name))
+                .env("CARGO_TARGET_DIR", &target)
+                .status();
+            if !checked.is_ok_and(|status| status.success()) {
+                failed.push(label);
+            }
+        }
+        assert!(
+            failed.is_empty(),
+            "these games fail their check: {failed:#?}"
+        );
     }
 }

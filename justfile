@@ -19,3 +19,8 @@ test:
 [positional-arguments]
 run *args:
     cargo run -- "$@"
+
+# make every game the CLI can make, from the template on GitHub, and run each one's `just check`:
+# an hour or so, before every release
+check-combos:
+    cargo test -- --ignored --nocapture

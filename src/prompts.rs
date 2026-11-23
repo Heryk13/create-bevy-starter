@@ -1,8 +1,10 @@
-use inquire::{Confirm, Select, Text, error::InquireResult, validator::Validation};
+use inquire::{Confirm, MultiSelect, Select, Text, error::InquireResult, validator::Validation};
 use std::fmt::{self, Display, Formatter};
 use std::path::PathBuf;
 
-use crate::choices::{Camera, Choices, Kind, is_valid_name, project_path, title_from_name};
+use crate::choices::{
+    Camera, Choices, Kind, Player3d, is_valid_name, project_path, title_from_name,
+};
 
 // ==== Config =================================================================
 
@@ -11,10 +13,9 @@ pub(crate) const NAME_RULE: &str = "Use ASCII letters, digits, - and _, not star
 
 // ==== Types ==================================================================
 
-// CONTRIBUTING gives a choice the CLI cannot build no variant, and `MultiplayerItem::Yes`,
-// `CameraItem::ThirdPerson` and `CameraItem::Isometric` are such choices: the menu has to show
-// them as coming soon. They never leave this file: their questions ask again when one is
-// picked, and hand back only what the CLI can build
+// CONTRIBUTING gives a choice the CLI cannot build no variant, and `CameraItem::Isometric` is
+// such a choice: the menu has to show it as coming soon. It never leaves this file: its question
+// asks again when it is picked, and hands back only what the CLI can build
 
 /// One line of the kind menu.
 #[derive(Clone, Copy)]
@@ -35,10 +36,9 @@ impl Display for KindItem {
     }
 }
 
-/// One line of the camera menu, asked of a 3D game.
+/// One line of the camera menu, asked of a 3D game, where any of them can be ticked.
 #[derive(Clone, Copy)]
 enum CameraItem {
-    None,
     FirstPerson,
     ThirdPerson,
     Isometric,
@@ -47,9 +47,8 @@ enum CameraItem {
 impl Display for CameraItem {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let label = match self {
-            CameraItem::None => "None",
             CameraItem::FirstPerson => "First person",
-            CameraItem::ThirdPerson => "Third person (coming soon)",
+            CameraItem::ThirdPerson => "Third person",
             CameraItem::Isometric => "Isometric (coming soon)",
         };
         write!(f, "{label}")
@@ -73,23 +72,6 @@ impl Display for PlayerItem {
     }
 }
 
-/// One line of the multiplayer menu.
-#[derive(Clone, Copy)]
-enum MultiplayerItem {
-    No,
-    Yes,
-}
-
-impl Display for MultiplayerItem {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let label = match self {
-            MultiplayerItem::No => "No",
-            MultiplayerItem::Yes => "Yes (coming soon)",
-        };
-        write!(f, "{label}")
-    }
-}
-
 // ==== Questions ==============================================================
 
 /// Asks every question in order and gathers the answers, before anything is written to disk.
@@ -106,12 +88,13 @@ pub(crate) fn ask_choices(name: Option<String>, folder: Option<PathBuf>) -> Inqu
     };
     let title = ask_title(&name)?;
     let kind = ask_kind()?;
-    ask_multiplayer()?;
+    let multiplayer = ask_multiplayer()?;
     Ok(Choices {
         name,
         title,
         folder,
         kind,
+        multiplayer,
     })
 }
 
@@ -144,7 +127,7 @@ fn ask_title(name: &str) -> InquireResult<String> {
     Text::new("Game title:").with_default(&default).prompt()
 }
 
-/// Asks what kind of game to start, of a 3D one its camera, and of a 2D one its player.
+/// Asks what kind of game to start, of a 3D one its player, and of a 2D one its player.
 fn ask_kind() -> InquireResult<Kind> {
     let item = Select::new(
         "Kind:",
@@ -153,9 +136,25 @@ fn ask_kind() -> InquireResult<Kind> {
     .prompt()?;
     Ok(match item {
         KindItem::Empty => Kind::Empty,
-        KindItem::ThreeD => Kind::ThreeD(ask_camera()?),
+        KindItem::ThreeD => Kind::ThreeD(ask_player_3d()?),
         KindItem::TwoD => Kind::TwoD(ask_player()?),
     })
+}
+
+/// Asks for a 3D game's cameras, and when it has any, so a player, whether a second player can
+/// split the screen with it. No camera is the level alone.
+fn ask_player_3d() -> InquireResult<Option<Player3d>> {
+    let cameras = ask_cameras()?;
+    if cameras.is_empty() {
+        return Ok(None);
+    }
+    let split_screen = Confirm::new("Split screen? (a second player on a gamepad)")
+        .with_default(false)
+        .prompt()?;
+    Ok(Some(Player3d {
+        cameras,
+        split_screen,
+    }))
 }
 
 /// Asks whether a 2D game starts with a player, a square that walks the room, or with the
@@ -166,45 +165,44 @@ fn ask_player() -> InquireResult<bool> {
     Ok(matches!(item, PlayerItem::TopDownSquare))
 }
 
-/// Asks which camera a 3D game starts with, None being the level alone, and asks again when
-/// one that is coming soon is picked: they are shown so the user knows they are coming, but
-/// they cannot be built yet.
-fn ask_camera() -> InquireResult<Option<Camera>> {
+/// Asks which cameras a 3D game's player has, any of them ticked with Space; none ticked is the
+/// level alone, with no player. Two make F5 switch between them. Asks again when the one that
+/// is coming soon is ticked: it is shown so the user knows it is coming, but it cannot be built
+/// yet.
+fn ask_cameras() -> InquireResult<Vec<Camera>> {
     loop {
-        let item = Select::new(
-            "Camera:",
+        let items = MultiSelect::new(
+            "Cameras (Space ticks, none for the level alone):",
             vec![
-                CameraItem::None,
                 CameraItem::FirstPerson,
                 CameraItem::ThirdPerson,
                 CameraItem::Isometric,
             ],
         )
         .prompt()?;
-        match item {
-            CameraItem::None => return Ok(None),
-            CameraItem::FirstPerson => return Ok(Some(Camera::FirstPerson)),
-            CameraItem::ThirdPerson | CameraItem::Isometric => {
-                println!("That camera is coming soon. Pick another.");
-            }
+        if items
+            .iter()
+            .any(|item| matches!(item, CameraItem::Isometric))
+        {
+            println!("Isometric is coming soon. Untick it.");
+            continue;
         }
+        return Ok(items
+            .into_iter()
+            .filter_map(|item| match item {
+                CameraItem::FirstPerson => Some(Camera::FirstPerson),
+                CameraItem::ThirdPerson => Some(Camera::ThirdPerson),
+                CameraItem::Isometric => None,
+            })
+            .collect());
     }
 }
 
-/// Asks whether the game is multiplayer, and asks again when Yes is picked: it is shown so the
-/// user knows it is coming, but it cannot be built yet, so the answer changes nothing.
-fn ask_multiplayer() -> InquireResult<()> {
-    loop {
-        let item = Select::new(
-            "Multiplayer:",
-            vec![MultiplayerItem::No, MultiplayerItem::Yes],
-        )
-        .prompt()?;
-        match item {
-            MultiplayerItem::No => return Ok(()),
-            MultiplayerItem::Yes => println!("Multiplayer is coming soon. Pick No."),
-        }
-    }
+/// Asks whether friends can play the game together over the LAN or a VPN, one hosting.
+fn ask_multiplayer() -> InquireResult<bool> {
+    Confirm::new("Multiplayer? (co-op over the LAN, one player hosting)")
+        .with_default(false)
+        .prompt()
 }
 
 /// Shows where the game will be created and asks to go on. Enter says yes; no leaves the disk
