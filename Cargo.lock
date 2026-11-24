@@ -27,6 +27,7 @@ dependencies = [
 name = "create-bevy-starter"
 version = "0.4.2"
 dependencies = [
+ "crossterm",
  "inquire",
 ]
 

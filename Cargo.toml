@@ -15,6 +15,9 @@ include = ["src/**/*.rs", "README.md", "LICENSE-MIT", "LICENSE-APACHE"]
 
 [dependencies]
 inquire = "0.9.4"
+# the lists where several can be ticked, which read their keys themselves: inquire's own lists
+# answer on Enter. The version inquire already brings, so nothing new is built
+crossterm = "0.29.0"
 
 # the same lints as bevy-starter, less the ones only a Bevy game needs, and the print lints a
 # CLI has to break

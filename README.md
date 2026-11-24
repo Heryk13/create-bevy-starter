@@ -18,15 +18,17 @@ question, the confirmation.
 | Folder       | `.`, where the command runs; the game goes into `<folder>/<name>`             |
 | Title        | from the name: `bevy-template` becomes `Bevy Template`                        |
 | Kind         | Empty; 3D is a test level, 2D a room in tiles                                 |
-| Cameras      | asked of a 3D game, any ticked with Enter, Done going on. None, the level     |
-|              | under a still camera; First person and Third person each add physics and a    |
-|              | player walking it, and both together switch on F5; Isometric is coming soon   |
+| Cameras      | asked of a 3D game, any ticked with Enter or Space, Done going on. None, the  |
+|              | level under a still camera; First person and Third person each add physics    |
+|              | and a player walking it, and both together switch on F5; Isometric is coming  |
+|              | soon                                                                          |
 | Player       | asked of a 2D game. None, the room alone; Top-down square adds a square that  |
 |              | walks it, the camera following                                                |
-| Extras       | any ticked with Enter, Done going on. Split screen, offered to a 3D game      |
-|              | with a camera, lets a second player join on a gamepad (Select), the window    |
-|              | cut top and bottom; Multiplayer lets friends join the game over the LAN, one  |
-|              | hosting from the pause menu, the others finding it from the main menu         |
+| Extras       | any ticked with Enter or Space, Done going on. Split screen, offered to a 3D  |
+|              | game with a camera, lets a second player join on a gamepad (Select), the      |
+|              | window cut top and bottom; Multiplayer lets friends join the game over the    |
+|              | LAN, one hosting from the pause menu, the others finding it from the main     |
+|              | menu                                                                          |
 
 The answers pick the template branch the game is cloned from:
 
