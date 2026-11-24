@@ -55,6 +55,23 @@ impl Display for CameraItem {
     }
 }
 
+/// One line of the extras menu, where any of them can be ticked.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ExtraItem {
+    SplitScreen,
+    Multiplayer,
+}
+
+impl Display for ExtraItem {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let label = match self {
+            ExtraItem::SplitScreen => "Split screen (a second player on a gamepad)",
+            ExtraItem::Multiplayer => "Multiplayer (co-op over the LAN, one player hosting)",
+        };
+        write!(f, "{label}")
+    }
+}
+
 /// One line of the player menu, asked of a 2D game.
 #[derive(Clone, Copy)]
 enum PlayerItem {
@@ -87,8 +104,16 @@ pub(crate) fn ask_choices(name: Option<String>, folder: Option<PathBuf>) -> Inqu
         None => ask_folder()?,
     };
     let title = ask_title(&name)?;
-    let kind = ask_kind()?;
-    let multiplayer = ask_multiplayer()?;
+    let mut kind = ask_kind()?;
+    let player_3d = match &mut kind {
+        Kind::ThreeD(Some(player)) => Some(player),
+        _ => None,
+    };
+    let extras = ask_extras(player_3d.is_some())?;
+    if let Some(player) = player_3d {
+        player.split_screen = extras.contains(&ExtraItem::SplitScreen);
+    }
+    let multiplayer = extras.contains(&ExtraItem::Multiplayer);
     Ok(Choices {
         name,
         title,
@@ -141,19 +166,16 @@ fn ask_kind() -> InquireResult<Kind> {
     })
 }
 
-/// Asks for a 3D game's cameras, and when it has any, so a player, whether a second player can
-/// split the screen with it. No camera is the level alone.
+/// Asks for a 3D game's cameras. No camera is the level alone; any is a player, whose split
+/// screen `ask_extras` asks for, off until then.
 fn ask_player_3d() -> InquireResult<Option<Player3d>> {
     let cameras = ask_cameras()?;
     if cameras.is_empty() {
         return Ok(None);
     }
-    let split_screen = Confirm::new("Split screen? (a second player on a gamepad)")
-        .with_default(false)
-        .prompt()?;
     Ok(Some(Player3d {
         cameras,
-        split_screen,
+        split_screen: false,
     }))
 }
 
@@ -198,11 +220,16 @@ fn ask_cameras() -> InquireResult<Vec<Camera>> {
     }
 }
 
-/// Asks whether friends can play the game together over the LAN or a VPN, one hosting.
-fn ask_multiplayer() -> InquireResult<bool> {
-    Confirm::new("Multiplayer? (co-op over the LAN, one player hosting)")
-        .with_default(false)
-        .prompt()
+/// Asks for the extras, any of them ticked with Space: split screen, offered only when
+/// `has_player_3d`, since a second player on the same screen needs a 3D player to copy, and
+/// multiplayer, friends playing together over the LAN or a VPN, one hosting.
+fn ask_extras(has_player_3d: bool) -> InquireResult<Vec<ExtraItem>> {
+    let mut items = Vec::new();
+    if has_player_3d {
+        items.push(ExtraItem::SplitScreen);
+    }
+    items.push(ExtraItem::Multiplayer);
+    MultiSelect::new("Extras (Space ticks, none is fine):", items).prompt()
 }
 
 /// Shows where the game will be created and asks to go on. Enter says yes; no leaves the disk
