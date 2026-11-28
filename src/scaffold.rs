@@ -4,8 +4,8 @@ use std::{fmt, fs};
 
 use crate::choices::{Choices, Fate, OPTIONS, Removal, branch_for, fate_of, project_path};
 use crate::edits::{
-    are_blocks_whole, remove_marked_blocks, remove_marked_lines, remove_section,
-    remove_without_lines, replace_line, restore_without_lines,
+    Comment, are_markers_whole, comment_for, remove_markdown_markers, remove_marked_blocks,
+    remove_marked_lines, remove_section, remove_without_lines, replace_line, restore_without_lines,
 };
 
 // ==== Config =================================================================
@@ -181,7 +181,7 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     remove_tools(path)?;
 
     // ---- what the game was not given ----------------------------------------
-    check_blocks(path)?;
+    check_markers(path)?;
     let mut changed = false;
     for option in &OPTIONS {
         changed |= match fate_of(choices, option) {
@@ -223,27 +223,29 @@ fn remove_tools(path: &Path) -> Result<(), ScaffoldError> {
     fs::remove_dir_all(tools_dir).map_err(|error| ScaffoldError::RemoveFailed(error.to_string()))
 }
 
-/// Refuses a game whose template has a broken block in a file markers are read in: one never
-/// closed, an `end` with nothing to close, or two that cross. Asked once, before anything is
-/// removed, for every option, kept or not: a broken block is the template's fault whatever was
-/// chosen, and removing it would eat the rest of its file.
-fn check_blocks(path: &Path) -> Result<(), ScaffoldError> {
+/// Refuses a game whose template has a broken marker in a file markers are read in: a block
+/// never closed, an `end` with nothing to close, two blocks that cross, or a without line that
+/// does not close its comment once, at its end. Asked once, before anything is removed, for
+/// every option, kept or not: a broken marker is the template's fault whatever was chosen, and
+/// removing a broken block would eat the rest of its file.
+fn check_markers(path: &Path) -> Result<(), ScaffoldError> {
     let markers = OPTIONS.map(|option| option.marker);
-    for file in marked_files(path)? {
+    for (file, comment) in marked_files(path)? {
         let text = fs::read_to_string(&file)
             .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
-        if !are_blocks_whole(&text, &markers) {
+        if !are_markers_whole(&text, &markers, comment) {
             return Err(ScaffoldError::TemplateChanged(file));
         }
     }
     Ok(())
 }
 
-/// Removes from the game at `path` what it was not given: `removal`'s files, and every block
-/// and line carrying its marker in `Cargo.toml` and the Rust sources, and tells whether
-/// anything went. When the kind `offered` the option, none of its files being there means the
-/// template moved them, and the game would keep what was left out; when it did not, the files
-/// are not expected, and only the markers are read.
+/// Removes from the game at `path` what it was not given: `removal`'s files, every block and
+/// line carrying its marker, and its without lines turned into the lines they hold, in every
+/// file markers are read in; and tells whether anything changed. When the kind `offered` the
+/// option, none of its files being there means the template moved them, and the game would
+/// keep what was left out; when it did not, the files are not expected, and only the markers
+/// are read.
 fn remove_left_out(path: &Path, removal: &Removal, offered: bool) -> Result<bool, ScaffoldError> {
     let mut found = false;
     for file in removal.files {
@@ -263,12 +265,13 @@ fn remove_left_out(path: &Path, removal: &Removal, offered: bool) -> Result<bool
         return Err(ScaffoldError::TemplateChanged(path.join(first)));
     }
     let mut changed = found;
-    for source in marked_files(path)? {
+    for (source, comment) in marked_files(path)? {
         let text = fs::read_to_string(&source)
             .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
-        let (without_blocks, dropped_blocks) = remove_marked_blocks(&text, removal.marker);
-        let (without_lines, dropped_lines) = remove_marked_lines(&without_blocks, removal.marker);
-        let (new_text, restored) = restore_without_lines(&without_lines, removal.marker);
+        let (without_blocks, dropped_blocks) = remove_marked_blocks(&text, removal.marker, comment);
+        let (without_lines, dropped_lines) =
+            remove_marked_lines(&without_blocks, removal.marker, comment);
+        let (new_text, restored) = restore_without_lines(&without_lines, removal.marker, comment);
         if dropped_blocks || dropped_lines || restored {
             fs::write(&source, new_text)
                 .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
@@ -278,16 +281,22 @@ fn remove_left_out(path: &Path, removal: &Removal, offered: bool) -> Result<bool
     Ok(changed)
 }
 
-/// Leaves `removal`'s option in the game at `path`, tidied: only its without lines go,
-/// commented-out code a game that has the option will never use. Its line markers and blocks
-/// stay, showing what belongs to it. Tells whether any file changed.
+/// Leaves `removal`'s option in the game at `path`, tidied: its without lines go, commented-out
+/// code a game that has the option will never use, and in Markdown its markers go too, which
+/// the docs never need. In code its line markers and blocks stay, showing what belongs to it.
+/// Tells whether any file changed.
 fn keep_option(path: &Path, removal: &Removal) -> Result<bool, ScaffoldError> {
     let mut changed = false;
-    for source in marked_files(path)? {
+    for (source, comment) in marked_files(path)? {
         let text = fs::read_to_string(&source)
             .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
-        let (new_text, dropped) = remove_without_lines(&text, removal.marker);
-        if dropped {
+        let (mut new_text, mut edited) = remove_without_lines(&text, removal.marker, comment);
+        if comment == Comment::Html {
+            let (unmarked, unmarked_any) = remove_markdown_markers(&new_text, removal.marker);
+            new_text = unmarked;
+            edited |= unmarked_any;
+        }
+        if edited {
             fs::write(&source, new_text)
                 .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
             changed = true;
@@ -296,28 +305,33 @@ fn keep_option(path: &Path, removal: &Removal) -> Result<bool, ScaffoldError> {
     Ok(changed)
 }
 
-/// Returns the files of the game at `path` that markers are read in: `Cargo.toml` and every
-/// Rust source.
-fn marked_files(path: &Path) -> Result<Vec<PathBuf>, ScaffoldError> {
-    let mut files = vec![path.join("Cargo.toml")];
-    collect_rust_files(&path.join("src"), &mut files)?;
+/// Returns the files of the game at `path` that markers are read in, each with how it writes
+/// a comment: every `.rs`, `.toml`, `.md` and `.ftl` file, at any depth.
+fn marked_files(path: &Path) -> Result<Vec<(PathBuf, Comment)>, ScaffoldError> {
+    let mut files = Vec::new();
+    collect_marked_files(path, &mut files)?;
     Ok(files)
 }
 
-/// Adds every `.rs` file under `dir`, at any depth, to `files`.
-fn collect_rust_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScaffoldError> {
+/// Adds every file under `dir`, at any depth, that markers are read in to `files`, with how it
+/// writes a comment.
+fn collect_marked_files(
+    dir: &Path,
+    files: &mut Vec<(PathBuf, Comment)>,
+) -> Result<(), ScaffoldError> {
     let entries =
         fs::read_dir(dir).map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
     for entry in entries {
         let entry = entry.map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
         let entry_path = entry.path();
         if entry_path.is_dir() {
-            collect_rust_files(&entry_path, files)?;
-        } else if entry_path
+            collect_marked_files(&entry_path, files)?;
+        } else if let Some(comment) = entry_path
             .extension()
-            .is_some_and(|extension| extension == "rs")
+            .and_then(|extension| extension.to_str())
+            .and_then(comment_for)
         {
-            files.push(entry_path);
+            files.push((entry_path, comment));
         }
     }
     Ok(())
@@ -432,7 +446,7 @@ mod tests {
         .expect("a file can be written");
         fs::write(game.join("Cargo.toml"), "[package]\n").expect("a file can be written");
         assert!(matches!(
-            check_blocks(&game),
+            check_markers(&game),
             Err(ScaffoldError::TemplateChanged(_))
         ));
     }
@@ -491,6 +505,57 @@ mod tests {
         assert!(keep_option(&game, &crate::choices::MULTIPLAYER).is_ok());
         let main = fs::read_to_string(game.join("src/main.rs")).expect("main.rs is there");
         assert_eq!(main, "pub(crate) mod files; // multiplayer\n");
+    }
+
+    #[test]
+    fn the_docs_and_the_locales_lose_what_is_left_out() {
+        let game = fresh_test_dir("create-bevy-starter-docs-left-out");
+        fs::create_dir_all(game.join("assets/locales/en")).expect("a folder can be created");
+        fs::write(game.join("multiplayer.rs"), "").expect("a file can be written");
+        fs::write(game.join("README.md"), "a\nb <!-- multiplayer -->\n")
+            .expect("a file can be written");
+        fs::write(
+            game.join("assets/locales/en/main.ftl"),
+            "# multiplayer: begin\nk = v\n# multiplayer: end\nl = w\n",
+        )
+        .expect("a file can be written");
+        let removal = Removal {
+            marker: "multiplayer",
+            files: &["multiplayer.rs"],
+        };
+        assert!(remove_left_out(&game, &removal, true).is_ok());
+        let readme = fs::read_to_string(game.join("README.md")).expect("README.md is there");
+        assert_eq!(readme, "a\n");
+        let locale =
+            fs::read_to_string(game.join("assets/locales/en/main.ftl")).expect("main.ftl is there");
+        assert_eq!(locale, "l = w\n");
+    }
+
+    #[test]
+    fn a_kept_option_leaves_no_marker_in_the_docs() {
+        let game = fresh_test_dir("create-bevy-starter-docs-kept");
+        fs::write(game.join("README.md"), "a <!-- multiplayer -->\n")
+            .expect("a file can be written");
+        fs::write(game.join("main.rs"), "mod a; // multiplayer\n").expect("a file can be written");
+        assert!(keep_option(&game, &crate::choices::MULTIPLAYER).is_ok());
+        let readme = fs::read_to_string(game.join("README.md")).expect("README.md is there");
+        assert_eq!(readme, "a\n");
+        let main = fs::read_to_string(game.join("main.rs")).expect("main.rs is there");
+        assert_eq!(main, "mod a; // multiplayer\n");
+    }
+
+    #[test]
+    fn a_markdown_without_line_holding_its_close_is_refused() {
+        let game = fresh_test_dir("create-bevy-starter-broken-without");
+        fs::write(
+            game.join("README.md"),
+            "<!-- without multiplayer: a --> b -->\n",
+        )
+        .expect("a file can be written");
+        assert!(matches!(
+            check_markers(&game),
+            Err(ScaffoldError::TemplateChanged(_))
+        ));
     }
 
     // ---- every combination: `just check-combos` -----------------------------

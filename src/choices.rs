@@ -76,11 +76,12 @@ pub(crate) struct Choices {
     pub(crate) multiplayer: bool,
 }
 
-/// Something of the template a game may leave out: the files that are it, and the marker that
-/// ends every line outside them naming it (`// <marker>`, or `# <marker>` in `Cargo.toml`), or
-/// fences a block of such lines (`// <marker>: begin` to `// <marker>: end`). Deleting the
-/// files, the lines and the blocks leaves a game that builds without it, as the template
-/// promises.
+/// Something of the template a game may leave out: the files that are it, and the marker that,
+/// as a comment of each file's kind (`// <marker>`, `# <marker>`, `<!-- <marker> -->`), ends
+/// every line outside them naming it, fences a block of such lines (`<marker>: begin` to
+/// `<marker>: end`), or opens a without line (`without <marker>: <line>`) that stands in for
+/// them. Deleting the files, the lines and the blocks, and turning the without lines into
+/// code, leaves a game that builds without it, as the template promises.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Removal {
     pub(crate) marker: &'static str,
