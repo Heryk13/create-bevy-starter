@@ -366,6 +366,20 @@ mod tests {
     }
 
     #[test]
+    fn no_marker_and_a_colon_start_another() {
+        // `// without camera: switch: …` would otherwise be read as a line of a marker `camera`
+        for option in OPTIONS {
+            let start = format!("{}: ", option.marker);
+            assert!(
+                OPTIONS
+                    .iter()
+                    .all(|other| !other.marker.starts_with(&start)),
+                "`{start}` starts another marker"
+            );
+        }
+    }
+
+    #[test]
     fn two_d_game_without_the_player_starts_from_base() {
         assert_eq!(branch_for(&Kind::TwoD(false)), "2d/base");
     }

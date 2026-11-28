@@ -4,7 +4,8 @@ use std::{fmt, fs};
 
 use crate::choices::{Choices, Fate, OPTIONS, Removal, branch_for, fate_of, project_path};
 use crate::edits::{
-    are_blocks_whole, remove_marked_blocks, remove_marked_lines, remove_section, replace_line,
+    are_blocks_whole, remove_marked_blocks, remove_marked_lines, remove_section,
+    remove_without_lines, replace_line, restore_without_lines,
 };
 
 // ==== Config =================================================================
@@ -184,7 +185,7 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     let mut changed = false;
     for option in &OPTIONS {
         changed |= match fate_of(choices, option) {
-            Fate::Kept => false,
+            Fate::Kept => keep_option(path, option)?,
             Fate::LeftOut => remove_left_out(path, option, true)?,
             Fate::NotOffered => remove_left_out(path, option, false)?,
         };
@@ -266,8 +267,27 @@ fn remove_left_out(path: &Path, removal: &Removal, offered: bool) -> Result<bool
         let text = fs::read_to_string(&source)
             .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
         let (without_blocks, dropped_blocks) = remove_marked_blocks(&text, removal.marker);
-        let (new_text, dropped_lines) = remove_marked_lines(&without_blocks, removal.marker);
-        if dropped_blocks || dropped_lines {
+        let (without_lines, dropped_lines) = remove_marked_lines(&without_blocks, removal.marker);
+        let (new_text, restored) = restore_without_lines(&without_lines, removal.marker);
+        if dropped_blocks || dropped_lines || restored {
+            fs::write(&source, new_text)
+                .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+            changed = true;
+        }
+    }
+    Ok(changed)
+}
+
+/// Leaves `removal`'s option in the game at `path`, tidied: only its without lines go,
+/// commented-out code a game that has the option will never use. Its line markers and blocks
+/// stay, showing what belongs to it. Tells whether any file changed.
+fn keep_option(path: &Path, removal: &Removal) -> Result<bool, ScaffoldError> {
+    let mut changed = false;
+    for source in marked_files(path)? {
+        let text = fs::read_to_string(&source)
+            .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+        let (new_text, dropped) = remove_without_lines(&text, removal.marker);
+        if dropped {
             fs::write(&source, new_text)
                 .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
             changed = true;
@@ -440,6 +460,37 @@ mod tests {
         assert!(remove_left_out(&game, &crate::choices::SPLIT_SCREEN, false).is_ok());
         let input = fs::read_to_string(game.join("src/input.rs")).expect("input.rs is there");
         assert_eq!(input, "mod a;\n");
+    }
+
+    #[test]
+    fn what_is_left_out_leaves_its_without_lines_as_code() {
+        let game = fresh_test_dir("create-bevy-starter-without-restored");
+        fs::create_dir(game.join("src")).expect("a folder can be created");
+        fs::write(game.join("src/multiplayer.rs"), "").expect("a file can be written");
+        fs::write(
+            game.join("src/main.rs"),
+            "pub(crate) mod files; // multiplayer\n// without multiplayer: mod files;\n",
+        )
+        .expect("a file can be written");
+        fs::write(game.join("Cargo.toml"), "[package]\n").expect("a file can be written");
+        assert!(remove_left_out(&game, &crate::choices::MULTIPLAYER, true).is_ok());
+        let main = fs::read_to_string(game.join("src/main.rs")).expect("main.rs is there");
+        assert_eq!(main, "mod files;\n");
+    }
+
+    #[test]
+    fn a_kept_option_keeps_no_without_line() {
+        let game = fresh_test_dir("create-bevy-starter-without-kept");
+        fs::create_dir(game.join("src")).expect("a folder can be created");
+        fs::write(
+            game.join("src/main.rs"),
+            "pub(crate) mod files; // multiplayer\n// without multiplayer: mod files;\n",
+        )
+        .expect("a file can be written");
+        fs::write(game.join("Cargo.toml"), "[package]\n").expect("a file can be written");
+        assert!(keep_option(&game, &crate::choices::MULTIPLAYER).is_ok());
+        let main = fs::read_to_string(game.join("src/main.rs")).expect("main.rs is there");
+        assert_eq!(main, "pub(crate) mod files; // multiplayer\n");
     }
 
     // ---- every combination: `just check-combos` -----------------------------

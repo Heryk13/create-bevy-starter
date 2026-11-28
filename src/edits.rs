@@ -127,6 +127,58 @@ pub(crate) fn remove_marked_lines(text: &str, marker: &str) -> (String, bool) {
     (new_text, dropped)
 }
 
+/// Returns `text` with every without line of `marker` (`// without marker: <line>`, `#` in
+/// TOML) turned into the line it holds, at the comment's indentation, and whether any was. A
+/// game that leaves the option out gets the line that stands in for what went.
+pub(crate) fn restore_without_lines(text: &str, marker: &str) -> (String, bool) {
+    let mut restored = false;
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| match without_line_of(line, marker) {
+            Some(code) => {
+                restored = true;
+                code
+            }
+            None => line.to_string(),
+        })
+        .collect();
+    let mut new_text = lines.join("\n");
+    if text.ends_with('\n') && !new_text.is_empty() {
+        new_text.push('\n');
+    }
+    (new_text, restored)
+}
+
+/// Returns `text` without the without lines of `marker`, and whether any was dropped. A game
+/// that keeps the option will never use them, and commented-out code is only noise.
+pub(crate) fn remove_without_lines(text: &str, marker: &str) -> (String, bool) {
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|line| without_line_of(line, marker).is_none())
+        .collect();
+    let dropped = kept.len() != text.lines().count();
+    let mut new_text = kept.join("\n");
+    if text.ends_with('\n') && !new_text.is_empty() {
+        new_text.push('\n');
+    }
+    (new_text, dropped)
+}
+
+/// Returns the line a without line of `marker` holds, at the comment's indentation, if `line`
+/// is one. Matched whole: the marker must be followed by `: `, so `camera: first` never takes
+/// `// without camera: first-person: …`, which is why no marker and `: ` may start another.
+fn without_line_of(line: &str, marker: &str) -> Option<String> {
+    let comment = line.trim_start();
+    let indent = &line[..line.len() - comment.len()];
+    let code = comment
+        .strip_prefix("// ")
+        .or_else(|| comment.strip_prefix("# "))?
+        .strip_prefix("without ")?
+        .strip_prefix(marker)?
+        .strip_prefix(": ")?;
+    Some(format!("{indent}{code}"))
+}
+
 /// Returns which fence of `marker`'s blocks `line` is, if it is one: the whole line, spaces
 /// aside, is `// marker: begin` or `// marker: end`, or the same with `#`. Matched whole, so
 /// `camera: first` never opens a block of `camera: first-person`.
@@ -315,6 +367,54 @@ mod tests {
         assert_eq!(
             remove_marked_lines(text, "camera: first"),
             (text.to_string(), false)
+        );
+    }
+
+    #[test]
+    fn a_without_line_becomes_its_line_at_its_indentation() {
+        let text = "struct A {\n    // without split screen: pads: Query<&Gamepad>,\n}\n";
+        assert_eq!(
+            restore_without_lines(text, "split screen"),
+            (
+                "struct A {\n    pads: Query<&Gamepad>,\n}\n".to_string(),
+                true
+            )
+        );
+    }
+
+    #[test]
+    fn a_toml_without_line_becomes_its_line() {
+        let text = "# without multiplayer: name = \"solo\"\n";
+        assert_eq!(
+            restore_without_lines(text, "multiplayer"),
+            ("name = \"solo\"\n".to_string(), true)
+        );
+    }
+
+    #[test]
+    fn a_without_line_of_another_marker_stays_a_comment() {
+        let text = "// without multiplayer: mod files;\n";
+        assert_eq!(
+            restore_without_lines(text, "split screen"),
+            (text.to_string(), false)
+        );
+    }
+
+    #[test]
+    fn a_without_line_is_matched_whole() {
+        let text = "// without camera: first-person: mod a;\n";
+        assert_eq!(
+            restore_without_lines(text, "camera: first"),
+            (text.to_string(), false)
+        );
+    }
+
+    #[test]
+    fn a_kept_option_loses_its_without_lines() {
+        let text = "a\n    // without split screen: b\nc\n";
+        assert_eq!(
+            remove_without_lines(text, "split screen"),
+            ("a\nc\n".to_string(), true)
         );
     }
 }
