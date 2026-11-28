@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 // ==== Config =================================================================
 
 // ---- what a game may leave out, as the template marks it --------------------
-// `others.rs` is in the player branches only: a file that is not there is skipped
+// `others.rs` is in the player branches only: a file that is not there is skipped. The words
+// are those `just check-combos` looks for: each names its option and nothing else in the
+// template, which is why `shoulder` (the capsule is "half a shoulder width"), `first-person`
+// (`look.rs` cites Bevy's example) and `F5` are not among them
 pub(crate) const MULTIPLAYER: Removal = Removal {
     marker: "multiplayer",
     files: &[
@@ -11,22 +14,49 @@ pub(crate) const MULTIPLAYER: Removal = Removal {
         "src/multiplayer",
         "src/screens/gameplay/player/others.rs",
     ],
+    words: &[
+        "multiplayer",
+        "Multiplayer",
+        "lightyear",
+        "others.rs",
+        "find-server",
+        "Find Server",
+        "is_shared_game",
+        "LockedProps",
+    ],
 };
 pub(crate) const FIRST_PERSON: Removal = Removal {
     marker: "camera: first-person",
     files: &["src/screens/gameplay/player/first_person.rs"],
+    words: &["first_person", "FirstPerson", "first person"],
 };
 pub(crate) const THIRD_PERSON: Removal = Removal {
     marker: "camera: third-person",
     files: &["src/screens/gameplay/player/third_person.rs"],
+    words: &[
+        "third_person",
+        "ThirdPerson",
+        "third person",
+        "third-person",
+        "CameraRays",
+        "CAMERA_RAYS",
+        "swap-shoulder",
+    ],
 };
 pub(crate) const CAMERA_SWITCH: Removal = Removal {
     marker: "camera: switch",
     files: &["src/screens/gameplay/player/camera_switch.rs"],
+    words: &[
+        "camera_switch",
+        "CameraView",
+        "CAMERA_VIEWS",
+        "switch-camera",
+    ],
 };
 pub(crate) const SPLIT_SCREEN: Removal = Removal {
     marker: "split screen",
     files: &["src/screens/gameplay/player/split_screen.rs"],
+    words: &["split_screen", "split screen", "GuestPad"],
 };
 
 /// Every option a game may leave out. A file's blocks are checked for all of them at once,
@@ -81,11 +111,13 @@ pub(crate) struct Choices {
 /// every line outside them naming it, fences a block of such lines (`<marker>: begin` to
 /// `<marker>: end`), or opens a without line (`without <marker>: <line>`) that stands in for
 /// them. Deleting the files, the lines and the blocks, and turning the without lines into
-/// code, leaves a game that builds without it, as the template promises.
+/// code, leaves a game that builds without it, as the template promises. Its words are what
+/// `just check-combos` finds in a game that left it out when the template forgot a marker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Removal {
     pub(crate) marker: &'static str,
     pub(crate) files: &'static [&'static str],
+    pub(crate) words: &'static [&'static str],
 }
 
 /// What becomes of an option in a game: kept, left out of a kind that offers it, or left out

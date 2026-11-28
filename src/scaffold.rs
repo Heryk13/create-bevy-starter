@@ -523,6 +523,7 @@ mod tests {
         let removal = Removal {
             marker: "multiplayer",
             files: &["multiplayer.rs"],
+            words: &[],
         };
         assert!(remove_left_out(&game, &removal, true).is_ok());
         let readme = fs::read_to_string(game.join("README.md")).expect("README.md is there");
@@ -600,6 +601,58 @@ mod tests {
         every
     }
 
+    /// Returns where the game at `game` still names an option it left out: each line holding
+    /// one of `words`, in a file markers are read in, as `file:line: word`. `docs/roadmap/` is
+    /// skipped: it is the template's history, which a game keeps on purpose.
+    fn words_left_in(game: &Path, words: &[&str]) -> Vec<String> {
+        let roadmap = game.join("docs").join("roadmap");
+        let mut found = Vec::new();
+        let files = marked_files(game)
+            .unwrap_or_else(|error| panic!("the game's files can be listed: {error}"));
+        for (file, _) in files {
+            if file.starts_with(&roadmap) {
+                continue;
+            }
+            let text = fs::read_to_string(&file).expect("a marked file is text");
+            let shown = file
+                .strip_prefix(game)
+                .unwrap_or(&file)
+                .display()
+                .to_string();
+            for (index, line) in text.lines().enumerate() {
+                for word in words.iter().filter(|word| line.contains(*word)) {
+                    found.push(format!("{shown}:{}: {word}", index + 1));
+                }
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn a_word_left_in_a_game_is_found() {
+        let game = fresh_test_dir("create-bevy-starter-word-found");
+        fs::create_dir(game.join("src")).expect("a folder can be created");
+        fs::write(game.join("src/input.rs"), "struct A;\nstruct GuestPad;\n")
+            .expect("a file can be written");
+        let input = Path::new("src").join("input.rs");
+        assert_eq!(
+            words_left_in(&game, &["GuestPad"]),
+            vec![format!("{}:2: GuestPad", input.display())]
+        );
+    }
+
+    #[test]
+    fn the_roadmap_is_not_searched() {
+        let game = fresh_test_dir("create-bevy-starter-word-roadmap");
+        fs::create_dir_all(game.join("docs/roadmap")).expect("a folder can be created");
+        fs::write(
+            game.join("docs/roadmap/roadmap.md"),
+            "the split_screen row\n",
+        )
+        .expect("a file can be written");
+        assert!(words_left_in(&game, &["split_screen"]).is_empty());
+    }
+
     #[test]
     #[ignore = "clones the template and runs each game's `just check`, for an hour or so: \
                 `just check-combos`"]
@@ -608,6 +661,7 @@ mod tests {
         // one for every game, so Bevy is built once, not once a game
         let target = std::env::temp_dir().join("create-bevy-starter-combos-target");
         let mut failed = Vec::new();
+        let mut words_left = Vec::new();
         for choices in every_combination(&folder) {
             let label = format!(
                 "{}: {:?}, multiplayer {}",
@@ -618,14 +672,32 @@ mod tests {
                 failed.push(format!("{label}: {error}"));
                 continue;
             }
+            let game = project_path(&choices.folder, &choices.name);
+            for option in OPTIONS
+                .iter()
+                .filter(|option| fate_of(&choices, option) != Fate::Kept)
+            {
+                for found in words_left_in(&game, option.words) {
+                    words_left.push(format!("{label}: {found}"));
+                }
+            }
             let checked = Command::new("just")
                 .arg("check")
-                .current_dir(project_path(&choices.folder, &choices.name))
+                .current_dir(&game)
                 .env("CARGO_TARGET_DIR", &target)
                 .status();
             if !checked.is_ok_and(|status| status.success()) {
                 failed.push(label);
             }
+        }
+        // only reported until the template is marked: failing here would block the release the
+        // template's marking waits for (step 20 of `docs/specs/markers/design.md`)
+        println!(
+            "==== words of a left-out option still in a game: {}",
+            words_left.len()
+        );
+        for found in &words_left {
+            println!("{found}");
         }
         assert!(
             failed.is_empty(),
