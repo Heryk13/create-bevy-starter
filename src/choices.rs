@@ -87,6 +87,17 @@ pub(crate) struct Removal {
     pub(crate) files: &'static [&'static str],
 }
 
+/// What becomes of an option in a game: kept, left out of a kind that offers it, or left out
+/// of a kind that never had it. Only `LeftOut` is sure to find the option's files in the cloned
+/// branch, but `NotOffered` still has markers to read: `GuestPad`, the split screen's, lives in
+/// `main`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Fate {
+    Kept,
+    LeftOut,
+    NotOffered,
+}
+
 // ==== Helpers ================================================================
 
 // ---- answers: what the questions decide -------------------------------------
@@ -159,6 +170,20 @@ pub(crate) fn removals_for(choices: &Choices) -> Vec<Removal> {
         }
     }
     removals
+}
+
+/// Returns what becomes of `option` in the game `choices` make: multiplayer is offered to every
+/// kind, and the cameras and the split screen only to a 3D game with a player. An option offered
+/// is kept unless `removals_for` takes it out.
+pub(crate) fn fate_of(choices: &Choices, option: &Removal) -> Fate {
+    let offered = *option == MULTIPLAYER || matches!(choices.kind, Kind::ThreeD(Some(_)));
+    if !offered {
+        Fate::NotOffered
+    } else if removals_for(choices).contains(option) {
+        Fate::LeftOut
+    } else {
+        Fate::Kept
+    }
 }
 
 // ==== Tests ==================================================================
@@ -303,6 +328,40 @@ mod tests {
         assert_eq!(
             removals_for(&choices(Kind::ThreeD(Some(both)), true)),
             vec![SPLIT_SCREEN]
+        );
+    }
+
+    #[test]
+    fn a_chosen_option_is_kept() {
+        let first = player(&[Camera::FirstPerson], true);
+        assert_eq!(
+            fate_of(&choices(Kind::ThreeD(Some(first)), false), &SPLIT_SCREEN),
+            Fate::Kept
+        );
+    }
+
+    #[test]
+    fn an_option_offered_and_not_chosen_is_left_out() {
+        let first = player(&[Camera::FirstPerson], true);
+        assert_eq!(
+            fate_of(&choices(Kind::ThreeD(Some(first)), false), &THIRD_PERSON),
+            Fate::LeftOut
+        );
+    }
+
+    #[test]
+    fn a_two_d_game_is_not_offered_the_split_screen() {
+        assert_eq!(
+            fate_of(&choices(Kind::TwoD(true), true), &SPLIT_SCREEN),
+            Fate::NotOffered
+        );
+    }
+
+    #[test]
+    fn multiplayer_is_offered_to_an_empty_game() {
+        assert_eq!(
+            fate_of(&choices(Kind::Empty, false), &MULTIPLAYER),
+            Fate::LeftOut
         );
     }
 

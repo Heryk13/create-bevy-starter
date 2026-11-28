@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fmt, fs};
 
-use crate::choices::{Choices, OPTIONS, Removal, branch_for, project_path, removals_for};
+use crate::choices::{Choices, Fate, OPTIONS, Removal, branch_for, fate_of, project_path};
 use crate::edits::{
     are_blocks_whole, remove_marked_blocks, remove_marked_lines, remove_section, replace_line,
 };
@@ -181,11 +181,15 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
 
     // ---- what the game was not given ----------------------------------------
     check_blocks(path)?;
-    let removals = removals_for(choices);
-    for removal in &removals {
-        remove_left_out(path, removal)?;
+    let mut changed = false;
+    for option in &OPTIONS {
+        changed |= match fate_of(choices, option) {
+            Fate::Kept => false,
+            Fate::LeftOut => remove_left_out(path, option, true)?,
+            Fate::NotOffered => remove_left_out(path, option, false)?,
+        };
     }
-    if !removals.is_empty() {
+    if changed {
         tidy_after_removals(path);
     }
 
@@ -235,9 +239,11 @@ fn check_blocks(path: &Path) -> Result<(), ScaffoldError> {
 }
 
 /// Removes from the game at `path` what it was not given: `removal`'s files, and every block
-/// and line carrying its marker in `Cargo.toml` and the Rust sources. A removal none of whose
-/// files is there means the template moved them, and the game would keep what was left out.
-fn remove_left_out(path: &Path, removal: &Removal) -> Result<(), ScaffoldError> {
+/// and line carrying its marker in `Cargo.toml` and the Rust sources, and tells whether
+/// anything went. When the kind `offered` the option, none of its files being there means the
+/// template moved them, and the game would keep what was left out; when it did not, the files
+/// are not expected, and only the markers are read.
+fn remove_left_out(path: &Path, removal: &Removal, offered: bool) -> Result<bool, ScaffoldError> {
     let mut found = false;
     for file in removal.files {
         let file = path.join(file);
@@ -251,10 +257,11 @@ fn remove_left_out(path: &Path, removal: &Removal) -> Result<(), ScaffoldError> 
         removed.map_err(|error| ScaffoldError::RemoveFailed(error.to_string()))?;
         found = true;
     }
-    if !found {
+    if offered && !found {
         let first = removal.files.first().copied().unwrap_or_default();
         return Err(ScaffoldError::TemplateChanged(path.join(first)));
     }
+    let mut changed = found;
     for source in marked_files(path)? {
         let text = fs::read_to_string(&source)
             .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
@@ -263,9 +270,10 @@ fn remove_left_out(path: &Path, removal: &Removal) -> Result<(), ScaffoldError> 
         if dropped_blocks || dropped_lines {
             fs::write(&source, new_text)
                 .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+            changed = true;
         }
     }
-    Ok(())
+    Ok(changed)
 }
 
 /// Returns the files of the game at `path` that markers are read in: `Cargo.toml` and every
@@ -368,7 +376,7 @@ mod tests {
             "[dependencies]\nlightyear = \"0.31\" # multiplayer\n",
         )
         .expect("a file can be written");
-        assert!(remove_left_out(&game, &crate::choices::MULTIPLAYER).is_ok());
+        assert!(remove_left_out(&game, &crate::choices::MULTIPLAYER, true).is_ok());
         assert!(!game.join("src/multiplayer.rs").exists());
         assert!(!game.join("src/multiplayer").exists());
         let main = fs::read_to_string(game.join("src/main.rs")).expect("main.rs is there");
@@ -388,7 +396,7 @@ mod tests {
         )
         .expect("a file can be written");
         fs::write(game.join("Cargo.toml"), "[package]\n").expect("a file can be written");
-        assert!(remove_left_out(&game, &crate::choices::MULTIPLAYER).is_ok());
+        assert!(remove_left_out(&game, &crate::choices::MULTIPLAYER, true).is_ok());
         let main = fs::read_to_string(game.join("src/main.rs")).expect("main.rs is there");
         assert_eq!(main, "mod ui;\n");
     }
@@ -414,9 +422,24 @@ mod tests {
         let game = fresh_test_dir("create-bevy-starter-moved");
         fs::create_dir(game.join("src")).expect("a folder can be created");
         assert!(matches!(
-            remove_left_out(&game, &crate::choices::MULTIPLAYER),
+            remove_left_out(&game, &crate::choices::MULTIPLAYER, true),
             Err(ScaffoldError::TemplateChanged(_))
         ));
+    }
+
+    #[test]
+    fn an_option_not_offered_loses_its_blocks_without_its_files() {
+        let game = fresh_test_dir("create-bevy-starter-not-offered");
+        fs::create_dir(game.join("src")).expect("a folder can be created");
+        fs::write(
+            game.join("src/input.rs"),
+            "mod a;\n// split screen: begin\nstruct GuestPad;\n// split screen: end\n",
+        )
+        .expect("a file can be written");
+        fs::write(game.join("Cargo.toml"), "[package]\n").expect("a file can be written");
+        assert!(remove_left_out(&game, &crate::choices::SPLIT_SCREEN, false).is_ok());
+        let input = fs::read_to_string(game.join("src/input.rs")).expect("input.rs is there");
+        assert_eq!(input, "mod a;\n");
     }
 
     // ---- every combination: `just check-combos` -----------------------------
