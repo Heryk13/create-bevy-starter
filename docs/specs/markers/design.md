@@ -46,7 +46,7 @@ real game made with it (`biscuit-game`, first person alone) had to fix by hand:
 | Old CLIs | 0.4.x clones the same branches and knows only line markers. The template stays buildable by them: see "Staying buildable by 0.4" |
 | The locales | Now cleaned: Fluent has no comment at the end of a line, but it has comment lines, so blocks work there. 0.4 kept the keys because it had no way to mark them |
 | After removing | Unchanged: `cargo fmt` (a without line comes out at the comment's indentation, and a call can now fit one line) and `cargo metadata` |
-| The search in `just check-combos` | Each `Removal` carries the words that name its option (below). After making each game, `just check-combos` searches the files markers are read in, `docs/roadmap/` aside, for the words of every option the game left out, offered or not, and names the game, the file and the word. It only reports from step 6, and fails from step 20 on: failing sooner would block the release the template's marking waits for. It is what keeps the next template feature from bringing the problem back. The words are read only by that test, so the field carries `#[cfg_attr(not(test), expect(dead_code, reason = …))]` |
+| The search in `just check-combos` | Each `Removal` carries the words that name its option (below). After making each game, `just check-combos` searches the files markers are read in, `docs/roadmap/` aside, for the words of every option the game left out, offered or not, and names the game, the file and the word. It only reports from step 6, and fails from step 20 on: failing sooner would block the release the template's marking waits for. It is what keeps the next template feature from bringing the problem back. The words are read only by that test (see "What changed while building it", 5) |
 | `docs/roadmap/` | Kept, as now: a game may want the template's history, and `biscuit-game` kept it. If it ever goes, as a choice of the CLI, off by default. The search skips it |
 | `choices.rs` | Already 466 lines; the text edits (`replace_line`, `remove_section`, the markers) move to `src/edits.rs`, their own thing: text in, text out. `CONTRIBUTING.md`'s "The loop" names the new file |
 
@@ -370,4 +370,25 @@ option's docs are whole, is for the user to look at.
 
 ## What changed while building it
 
-Nothing yet.
+Steps 1 to 7 built 2026-11-28, each its own commit.
+
+1. **What becomes of an option is an enum** (step 3): `Fate { Kept, LeftOut, NotOffered }`,
+   from `fate_of(choices, option)`, and `build_game` goes through `OPTIONS` asking it.
+   `removals_for` stays as it was, what a kind offers and was not given, and `fate_of` reads
+   it: its tests needed no change.
+2. **The check covers without lines too** (step 5): `are_blocks_whole` became
+   `are_markers_whole`, and `check_blocks` `check_markers`. A Markdown without line never
+   closed is refused as well as one holding `-->`: its comment would hide the rest of the file
+   as GitHub renders the template.
+3. **The markers got a file of their own**, `src/markers.rs`, in a commit after step 5:
+   `edits.rs` had reached 622 lines, and the markers read as one thing. `edits.rs` keeps
+   `replace_line` and `remove_section`; `CONTRIBUTING.md`'s "The loop" names both.
+4. **Markers are read in the whole game**, every `.rs`, `.toml`, `.md` and `.ftl` at any depth,
+   not only `Cargo.toml` and `src/`. So the template's docs may **quote a marker only inside a
+   line** (in backticks, mid-sentence), never as a line of its own or at a line's end, outside
+   the sections the CLI removes first (`## Branches`): such a line would be read as a marker.
+   Step 9 writes the rules into `CONTRIBUTING.md`'s Branches section, which is removed before
+   the markers are read.
+5. **`words` needs no `expect(dead_code)`** (step 6): the derived `PartialEq` of `Removal`
+   reads every field, so the compiler never sees it unread, and the expectation went
+   unfulfilled.
