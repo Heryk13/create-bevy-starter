@@ -2,8 +2,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fmt, fs};
 
-use crate::choices::{Choices, Removal, branch_for, project_path, removals_for};
-use crate::edits::{remove_marked_lines, remove_section, replace_line};
+use crate::choices::{Choices, OPTIONS, Removal, branch_for, project_path, removals_for};
+use crate::edits::{
+    are_blocks_whole, remove_marked_blocks, remove_marked_lines, remove_section, replace_line,
+};
 
 // ==== Config =================================================================
 
@@ -178,6 +180,7 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     remove_tools(path)?;
 
     // ---- what the game was not given ----------------------------------------
+    check_blocks(path)?;
     let removals = removals_for(choices);
     for removal in &removals {
         remove_left_out(path, removal)?;
@@ -215,9 +218,25 @@ fn remove_tools(path: &Path) -> Result<(), ScaffoldError> {
     fs::remove_dir_all(tools_dir).map_err(|error| ScaffoldError::RemoveFailed(error.to_string()))
 }
 
-/// Removes from the game at `path` what it was not given: `removal`'s files, and every line
-/// carrying its marker in `Cargo.toml` and the Rust sources. A removal none of whose files is
-/// there means the template moved them, and the game would keep what was left out.
+/// Refuses a game whose template has a broken block in a file markers are read in: one never
+/// closed, an `end` with nothing to close, or two that cross. Asked once, before anything is
+/// removed, for every option, kept or not: a broken block is the template's fault whatever was
+/// chosen, and removing it would eat the rest of its file.
+fn check_blocks(path: &Path) -> Result<(), ScaffoldError> {
+    let markers = OPTIONS.map(|option| option.marker);
+    for file in marked_files(path)? {
+        let text = fs::read_to_string(&file)
+            .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
+        if !are_blocks_whole(&text, &markers) {
+            return Err(ScaffoldError::TemplateChanged(file));
+        }
+    }
+    Ok(())
+}
+
+/// Removes from the game at `path` what it was not given: `removal`'s files, and every block
+/// and line carrying its marker in `Cargo.toml` and the Rust sources. A removal none of whose
+/// files is there means the template moved them, and the game would keep what was left out.
 fn remove_left_out(path: &Path, removal: &Removal) -> Result<(), ScaffoldError> {
     let mut found = false;
     for file in removal.files {
@@ -236,18 +255,25 @@ fn remove_left_out(path: &Path, removal: &Removal) -> Result<(), ScaffoldError> 
         let first = removal.files.first().copied().unwrap_or_default();
         return Err(ScaffoldError::TemplateChanged(path.join(first)));
     }
-    let mut sources = vec![path.join("Cargo.toml")];
-    collect_rust_files(&path.join("src"), &mut sources)?;
-    for source in sources {
+    for source in marked_files(path)? {
         let text = fs::read_to_string(&source)
             .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
-        let (new_text, dropped) = remove_marked_lines(&text, removal.marker);
-        if dropped {
+        let (without_blocks, dropped_blocks) = remove_marked_blocks(&text, removal.marker);
+        let (new_text, dropped_lines) = remove_marked_lines(&without_blocks, removal.marker);
+        if dropped_blocks || dropped_lines {
             fs::write(&source, new_text)
                 .map_err(|error| ScaffoldError::EditFailed(error.to_string()))?;
         }
     }
     Ok(())
+}
+
+/// Returns the files of the game at `path` that markers are read in: `Cargo.toml` and every
+/// Rust source.
+fn marked_files(path: &Path) -> Result<Vec<PathBuf>, ScaffoldError> {
+    let mut files = vec![path.join("Cargo.toml")];
+    collect_rust_files(&path.join("src"), &mut files)?;
+    Ok(files)
 }
 
 /// Adds every `.rs` file under `dir`, at any depth, to `files`.
@@ -349,6 +375,38 @@ mod tests {
         assert_eq!(main, "mod ui;\n");
         let manifest = fs::read_to_string(game.join("Cargo.toml")).expect("Cargo.toml is there");
         assert_eq!(manifest, "[dependencies]\n");
+    }
+
+    #[test]
+    fn what_is_left_out_goes_with_its_blocks() {
+        let game = fresh_test_dir("create-bevy-starter-left-out-blocks");
+        fs::create_dir(game.join("src")).expect("a folder can be created");
+        fs::write(game.join("src/multiplayer.rs"), "").expect("a file can be written");
+        fs::write(
+            game.join("src/main.rs"),
+            "mod ui;\n// multiplayer: begin\nmod net;\n// multiplayer: end\n",
+        )
+        .expect("a file can be written");
+        fs::write(game.join("Cargo.toml"), "[package]\n").expect("a file can be written");
+        assert!(remove_left_out(&game, &crate::choices::MULTIPLAYER).is_ok());
+        let main = fs::read_to_string(game.join("src/main.rs")).expect("main.rs is there");
+        assert_eq!(main, "mod ui;\n");
+    }
+
+    #[test]
+    fn a_template_with_a_broken_block_is_refused() {
+        let game = fresh_test_dir("create-bevy-starter-broken-block");
+        fs::create_dir(game.join("src")).expect("a folder can be created");
+        fs::write(
+            game.join("src/main.rs"),
+            "// multiplayer: begin\nmod net;\n",
+        )
+        .expect("a file can be written");
+        fs::write(game.join("Cargo.toml"), "[package]\n").expect("a file can be written");
+        assert!(matches!(
+            check_blocks(&game),
+            Err(ScaffoldError::TemplateChanged(_))
+        ));
     }
 
     #[test]

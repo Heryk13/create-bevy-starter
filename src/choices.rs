@@ -29,6 +29,16 @@ pub(crate) const SPLIT_SCREEN: Removal = Removal {
     files: &["src/screens/gameplay/player/split_screen.rs"],
 };
 
+/// Every option a game may leave out. A file's blocks are checked for all of them at once,
+/// since one option's block may sit inside another's.
+pub(crate) const OPTIONS: [Removal; 5] = [
+    MULTIPLAYER,
+    FIRST_PERSON,
+    THIRD_PERSON,
+    CAMERA_SWITCH,
+    SPLIT_SCREEN,
+];
+
 // ==== Types ==================================================================
 
 /// A camera a 3D game's player can have. Only the cameras the template has: the ones still to
@@ -67,8 +77,10 @@ pub(crate) struct Choices {
 }
 
 /// Something of the template a game may leave out: the files that are it, and the marker that
-/// ends every line outside them naming it (`// <marker>`, or `# <marker>` in `Cargo.toml`).
-/// Deleting both leaves a game that builds without it, as the template promises.
+/// ends every line outside them naming it (`// <marker>`, or `# <marker>` in `Cargo.toml`), or
+/// fences a block of such lines (`// <marker>: begin` to `// <marker>: end`). Deleting the
+/// files, the lines and the blocks leaves a game that builds without it, as the template
+/// promises.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Removal {
     pub(crate) marker: &'static str,

@@ -1,3 +1,12 @@
+// ==== Types ==================================================================
+
+/// Which end of a block a line is: the one that opens it, or the one that closes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fence {
+    Begin,
+    End,
+}
+
 // ==== Helpers ================================================================
 
 /// Returns `text` with every line that starts with `prefix` replaced by `new_line`, or `None`
@@ -52,6 +61,53 @@ pub(crate) fn remove_section(text: &str, heading: &str) -> Option<String> {
     }
 }
 
+/// Tells whether every block in `text`, of any of `markers`, is whole: each `begin` closed by
+/// its own `end`, after the blocks opened inside it. A block left open, an `end` with nothing to
+/// close, and two blocks that cross are not: no removal could tell where they end, and removing
+/// one of two that cross would cut the other in half.
+pub(crate) fn are_blocks_whole(text: &str, markers: &[&str]) -> bool {
+    let mut open: Vec<&str> = Vec::new();
+    for line in text.lines() {
+        for &marker in markers {
+            match fence_of(line, marker) {
+                Some(Fence::Begin) => open.push(marker),
+                // the guard closes the innermost block open, whichever it was
+                Some(Fence::End) if open.pop() != Some(marker) => return false,
+                Some(Fence::End) | None => {}
+            }
+        }
+    }
+    open.is_empty()
+}
+
+/// Returns `text` without the blocks of `marker`, each from its `// marker: begin` line to its
+/// `// marker: end` line (`#` in TOML), both included, and whether any was dropped. Whatever is
+/// inside goes with it, blocks of its own marker or of another included. Asked only of a text
+/// `are_blocks_whole` passed: here a block left open would run to the end.
+pub(crate) fn remove_marked_blocks(text: &str, marker: &str) -> (String, bool) {
+    let mut depth = 0_usize;
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|line| match fence_of(line, marker) {
+            Some(Fence::Begin) => {
+                depth += 1;
+                false
+            }
+            Some(Fence::End) => {
+                depth = depth.saturating_sub(1);
+                false
+            }
+            None => depth == 0,
+        })
+        .collect();
+    let dropped = kept.len() != text.lines().count();
+    let mut new_text = kept.join("\n");
+    if text.ends_with('\n') && !new_text.is_empty() {
+        new_text.push('\n');
+    }
+    (new_text, dropped)
+}
+
 /// Returns `text` without the lines that end with `marker` as a comment, `// marker` in Rust or
 /// `# marker` in TOML, and whether any was dropped. The comment is matched whole, so
 /// `camera: first-person` never takes a line marked `camera: first`.
@@ -69,6 +125,21 @@ pub(crate) fn remove_marked_lines(text: &str, marker: &str) -> (String, bool) {
         new_text.push('\n');
     }
     (new_text, dropped)
+}
+
+/// Returns which fence of `marker`'s blocks `line` is, if it is one: the whole line, spaces
+/// aside, is `// marker: begin` or `// marker: end`, or the same with `#`. Matched whole, so
+/// `camera: first` never opens a block of `camera: first-person`.
+fn fence_of(line: &str, marker: &str) -> Option<Fence> {
+    let line = line.trim();
+    let comment = line
+        .strip_prefix("// ")
+        .or_else(|| line.strip_prefix("# "))?;
+    match comment.strip_prefix(marker)?.strip_prefix(": ")? {
+        "begin" => Some(Fence::Begin),
+        "end" => Some(Fence::End),
+        _ => None,
+    }
 }
 
 // ==== Tests ==================================================================
@@ -143,6 +214,89 @@ mod tests {
         assert_eq!(
             remove_section("## Branches and more\nb\n", "## Branches"),
             None
+        );
+    }
+
+    #[test]
+    fn a_block_inside_another_is_whole() {
+        let text = "// multiplayer: begin\n// split screen: begin\nx\n// split screen: end\n\
+                    // multiplayer: end\n";
+        assert!(are_blocks_whole(text, &["multiplayer", "split screen"]));
+    }
+
+    #[test]
+    fn a_block_never_closed_is_broken() {
+        let text = "a\n// multiplayer: begin\nx\n";
+        assert!(!are_blocks_whole(text, &["multiplayer"]));
+    }
+
+    #[test]
+    fn an_end_with_nothing_to_close_is_broken() {
+        let text = "x\n// multiplayer: end\na\n";
+        assert!(!are_blocks_whole(text, &["multiplayer"]));
+    }
+
+    #[test]
+    fn blocks_that_cross_are_broken() {
+        let text = "// multiplayer: begin\n// split screen: begin\n// multiplayer: end\n\
+                    // split screen: end\n";
+        assert!(!are_blocks_whole(text, &["multiplayer", "split screen"]));
+    }
+
+    #[test]
+    fn a_marked_block_goes_with_its_fences() {
+        let text = "a\n    // split screen: begin\n    x\n    // split screen: end\nb\n";
+        assert_eq!(
+            remove_marked_blocks(text, "split screen"),
+            ("a\nb\n".to_string(), true)
+        );
+    }
+
+    #[test]
+    fn a_toml_block_goes_like_a_rust_one() {
+        let text =
+            "[dependencies]\n# multiplayer: begin\nlightyear = \"0.31\"\n# multiplayer: end\n";
+        assert_eq!(
+            remove_marked_blocks(text, "multiplayer"),
+            ("[dependencies]\n".to_string(), true)
+        );
+    }
+
+    #[test]
+    fn a_block_inside_one_of_its_own_marker_goes_with_it() {
+        let text = "// multiplayer: begin\na\n// multiplayer: begin\nb\n// multiplayer: end\nc\n\
+                    // multiplayer: end\nd\n";
+        assert_eq!(
+            remove_marked_blocks(text, "multiplayer"),
+            ("d\n".to_string(), true)
+        );
+    }
+
+    #[test]
+    fn a_block_takes_the_blocks_of_other_markers_inside_it() {
+        let text = "// multiplayer: begin\n// split screen: begin\nx\n// split screen: end\n\
+                    // multiplayer: end\nd\n";
+        assert_eq!(
+            remove_marked_blocks(text, "multiplayer"),
+            ("d\n".to_string(), true)
+        );
+    }
+
+    #[test]
+    fn a_block_of_another_marker_stays() {
+        let text = "// split screen: begin\nx\n// split screen: end\n";
+        assert_eq!(
+            remove_marked_blocks(text, "multiplayer"),
+            (text.to_string(), false)
+        );
+    }
+
+    #[test]
+    fn a_fence_is_matched_whole() {
+        let text = "// camera: first-person: begin\nx\n// camera: first-person: end\n";
+        assert_eq!(
+            remove_marked_blocks(text, "camera: first"),
+            (text.to_string(), false)
         );
     }
 
