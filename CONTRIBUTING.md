@@ -12,9 +12,9 @@ it is a decision. An exception without one is drift.
 ## The loop
 
 1. **Plan**: find where the change belongs, by what it does: the questions in `prompts.rs`,
-   the decisions in `choices.rs`, the edits of a file's text in `edits.rs`, the disk in
-   `scaffold.rs`. A change bigger than one commit
-   is designed first, in a spec with an implementation order of one commit per step.
+   the decisions in `choices.rs`, the edits of a file's text in `edits.rs`, the options'
+   markers in `markers.rs`, the disk in `scaffold.rs`. A change bigger than one commit is
+   designed first, in a spec with an implementation order of one commit per step.
 2. **Write** following the [code conventions](#code-conventions).
 3. **Test** the logic (see [Tests](#tests)).
 4. **Fix and check**: `just fix`, then `just check`.

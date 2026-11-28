@@ -3,9 +3,10 @@ use std::process::Command;
 use std::{fmt, fs};
 
 use crate::choices::{Choices, Fate, OPTIONS, Removal, branch_for, fate_of, project_path};
-use crate::edits::{
+use crate::edits::{remove_section, replace_line};
+use crate::markers::{
     Comment, are_markers_whole, comment_for, remove_markdown_markers, remove_marked_blocks,
-    remove_marked_lines, remove_section, remove_without_lines, replace_line, restore_without_lines,
+    remove_marked_lines, remove_without_lines, restore_without_lines,
 };
 
 // ==== Config =================================================================

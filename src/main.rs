@@ -7,6 +7,7 @@ use crate::choices::{Choices, is_valid_name};
 
 mod choices;
 mod edits;
+mod markers;
 mod prompts;
 mod scaffold;
 
