@@ -2,10 +2,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fmt, fs};
 
-use crate::choices::{
-    Choices, Removal, branch_for, project_path, removals_for, remove_marked_lines, remove_section,
-    replace_line,
-};
+use crate::choices::{Choices, Removal, branch_for, project_path, removals_for};
+use crate::edits::{remove_marked_lines, remove_section, replace_line};
 
 // ==== Config =================================================================
 
@@ -195,7 +193,7 @@ fn build_game(path: &Path, choices: &Choices) -> Result<(), ScaffoldError> {
     Ok(())
 }
 
-/// Rewrites `file` on disk with `edit`, one of the pure edits in `choices.rs`. When `edit` finds
+/// Rewrites `file` on disk with `edit`, one of the pure edits in `edits.rs`. When `edit` finds
 /// nothing to change, the template moved what the CLI edits, and that is reported instead of
 /// leaving the game half made.
 fn edit_file(file: &Path, edit: impl FnOnce(&str) -> Option<String>) -> Result<(), ScaffoldError> {

@@ -6,6 +6,7 @@ use std::process;
 use crate::choices::{Choices, is_valid_name};
 
 mod choices;
+mod edits;
 mod prompts;
 mod scaffold;
 
